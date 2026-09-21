@@ -1,0 +1,91 @@
+---
+title: "Individual Task 1"
+output: 
+  html_document:
+    code_download: TRUE
+editor_options: 
+  chunk_output_type: console
+---
+
+Maintain a tidy and readable R Markdown file that runs without any errors. Annotate your code by including brief descriptions of what the codes do.
+
+*Notes:* 
+- You can have separate code chunks within each section if preferred and/or include more subheadings. The `Insert a new code chunk` green button is on the top left corner and subheadings can be defined by hashtags.
+- Maintain the main headings that separate the requirements and make sure the codes can run in the order presented.
+- Consider completing your text responses in a document editor with spellcheck and then copy and paste the responses into the appropriate location in the RMD file.
+
+# Install and load packages and import and preview data
+
+```{r initial}
+# Install and load packages
+if(!require("pacman"))install.packages("pacman")
+pacman::p_load(readr, dplyr, tidyr, stringr, lubridate, purrr, ggplot2, gridExtra, GGally, corrplot)
+pacman::p_load(tidytext, textstem, wordcloud, textdata, topicmodels)
+pacman::p_load(DescTools, skimr, finalfit, rstatix, huxtable, jtools)
+
+# Import and preview data
+
+
+```
+
+# Data preparation
+
+## Non-text data
+
+Brief notes on judgement applied:
+
+< (Delete this line) Insert commentary here, bullet points are fine > 
+
+```{r req_2a}
+
+
+
+```
+
+## New variables created
+
+Brief notes on why the variables created could be useful:
+
+< (Delete this line) Insert commentary here, bullet points are fine >
+
+```{r req_2b}
+
+
+
+```
+
+## Text data
+
+```{r req_2c}
+
+
+
+```
+
+# Data-informed insights and recommendations
+
+## Topics content creators have been posting about
+
+< (Delete this line) Type insights here, bullet points are fine >
+
+```{r req_3ai}
+# Term frequency analysis
+
+
+```
+
+```{r req_3aii}
+# Topic modelling
+
+
+```
+
+## Level of user engagement and factors that influence user engagement
+
+< (Delete this line) Type insights and recommendations here, bullet points are fine >
+
+```{r req_3b}
+
+
+
+```
