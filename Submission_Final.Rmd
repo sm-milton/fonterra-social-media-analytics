@@ -1,20 +1,29 @@
 ---
-title: "Individual Task 1"
-output: 
+title: "Individual Task 1 – Fonterra Social Media Analysis"
+author: "Sheikh Mohammad Milton"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
   html_document:
-    code_download: TRUE
-editor_options: 
-  chunk_output_type: console
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    df_print: paged
 ---
 
-Maintain a tidy and readable R Markdown file that runs without any errors. Annotate your code by including brief descriptions of what the codes do.
+# 1. Introduction
 
-*Notes:* 
-- You can have separate code chunks within each section if preferred and/or include more subheadings. The `Insert a new code chunk` green button is on the top left corner and subheadings can be defined by hashtags.
-- Maintain the main headings that separate the requirements and make sure the codes can run in the order presented.
-- Consider completing your text responses in a document editor with spellcheck and then copy and paste the responses into the appropriate location in the RMD file.
+## 1.1 Purpose of the analysis
 
-# Install and load packages and import and preview data
+This assignment analyses Fonterra's social media content to identify the main topics discussed across its official social media accounts and to examine user engagement with that content. The analysis uses the supplied `fonterra.csv` dataset and is completed in R.
+
+The analysis focuses on two main questions:
+
+1. What topics have content creators been posting about on Fonterra's social media accounts?
+2. What is the level of user engagement, and what factors may influence engagement?
+
+The analysis includes data preparation, term-frequency analysis, topic modelling, exploratory data analysis, bivariate statistical analysis, and data-informed recommendations.
+
+## 1.2 Load packages
 
 ```{r initial}
 # Install and load packages
@@ -23,69 +32,283 @@ pacman::p_load(readr, dplyr, tidyr, stringr, lubridate, purrr, ggplot2, gridExtr
 pacman::p_load(tidytext, textstem, wordcloud, textdata, topicmodels)
 pacman::p_load(DescTools, skimr, finalfit, rstatix, huxtable, jtools)
 
-# Import and preview data
+```
 
+# 2. Data Import and Initial Inspection
+
+## 2.1 Import the dataset
+
+```{r Import Data}
+# Import and preview data
+data_raw <- read_csv("fonterra.csv", show_col_types = FALSE)
 
 ```
 
-# Data preparation
+## 2.1 Initial Inspection
 
-## Non-text data
+```{r Initial Inspection}
+# Display the dimensions of the dataset
+dim(data_raw)
 
-Brief notes on judgement applied:
+# Inspect the variable names and data types
+glimpse(data_raw)
 
-< (Delete this line) Insert commentary here, bullet points are fine > 
+# Display the first 10 rows
+head(data_raw, 10)
+
+# Display distinct values
+unique(data_raw$platform)
+unique(data_raw$media)
+
+# Checking decimal value in count variables
+data_raw |>
+  summarise(across(where(is.numeric), ~ any(.x %% 1 != 0, na.rm = TRUE)))
+```
+
+## 2.2 Dataset overview
+
+```{r dataset-overview}
+# Create a compact overview of the dataset.
+overview <- tibble(
+  item = c("Number of observations", "Number of variables",
+           "Number of platforms", "Number of unique URLs"),
+  value = c(
+    nrow(data_raw),
+    ncol(data_raw),
+    n_distinct(data_raw$platform),
+    n_distinct(data_raw$url)
+  )
+)
+
+kable(overview, caption = "Overview of the Fonterra dataset")
+
+rm(overview)
+```
+
+```{r platform-counts}
+# Count observations by social media platform
+platform_counts <- data_raw |>
+  count(platform, sort = TRUE)
+
+kable(platform_counts, caption = "Number of observations by platform")
+
+# Count observations by media
+media_counts <- data_raw |>
+  count(media, sort = TRUE)
+
+kable(media_counts, caption = "Number of observations by media")
+
+rm(platform_counts, media_counts)
+```
+
+## 2.3 Missing values
+
+```{r missing-values}
+# Count missing values in each variable.
+missing_summary <- data_raw |>
+  summarise(across(everything(), ~ sum(is.na(.)))) |>
+  pivot_longer(
+    cols = everything(),
+    names_to = "variable",
+    values_to = "missing_count"
+  ) |>
+  mutate(
+    missing_percent = missing_count / nrow(data_raw) * 100
+  ) |>
+  arrange(desc(missing_count))
+
+kable(
+  missing_summary,
+  digits = 2,
+  caption = "Missing values by variable"
+)
+
+rm(missing_summary)
+```
+
+**Observation:**
+
+i) Dataset under review has 9001 rows/ observations against 9 columns/ variables
+
+ii) Data Type:
+
+Character: platform, url, createdAt, text and media
+Number: commentCount, shareCount, shareCount, likeCount and videoplayCount
+
+iii) For better and accurate analysis, we must transform existing data type to their actual data format. We must transform:
+
+a) platform and media to categorical data type
+b) createdAt to DATE data type
+c) commentCount, shareCount, likeCount and videoplayCount to INTEGER data type
+
+iv) Maximum missing values exists in videoplayCount. This is natural since there may have several posts which don't have any video content
+
+v) 6994 observations have no specified media and there exists naming difference in media. It shows video and Video in separte category although the main difference exist in first letter. Also Photo, Image and image are same type media. So, adjustment is required to align this ambiguities.
+
+# 3. Data Preparation
+
+## 3.1 Non-text data
+
+### 3.1.1 Date and Time
+
+The createdAt variable is converted to a date-time variable. Separate year, month and day-of-week variables are also created for later analysis.
 
 ```{r req_2a}
+# Convert createdAt to a date-time variable and create useful time variables
+data <- data_raw |>
+  mutate(
+    created_datetime = ymd_hms(createdAt, quiet = TRUE, tz = "UTC"),
+    year = year(created_datetime),
+    month = month(created_datetime, label = TRUE, abbr = TRUE),
+    day_of_week = wday(created_datetime, label = TRUE, abbr = TRUE, week_start = 1)
+  )
 
-
-
-```
-
-## New variables created
-
-Brief notes on why the variables created could be useful:
-
-< (Delete this line) Insert commentary here, bullet points are fine >
-
-```{r req_2b}
-
-
-
-```
-
-## Text data
-
-```{r req_2c}
-
-
+# Check maximum and minimum year and whether any dates failed to convert
+print(min(year(data$created_datetime), na.rm = TRUE))
+print(max(year(data$created_datetime), na.rm = TRUE))
+sum(is.na(data$created_datetime))
 
 ```
 
-# Data-informed insights and recommendations
+**Observation:**
 
-## Topics content creators have been posting about
+i) We have data/ observations  ranging from the year 2010 to 2026
+ii) There exists no data failed to convert
 
-< (Delete this line) Type insights here, bullet points are fine >
+### 3.1.2 Number Data
 
-```{r req_3ai}
-# Term frequency analysis
+The commentCount, shareCount, likeCount and videoplayCount variables are converted to integer number
 
+```{r}
+# Converting commentCount, shareCount, likeCount and videoplayCount variables to integer number
+data <- data |>
+  mutate(across(
+    c(commentCount, shareCount, likeCount, videoplayCount), 
+    as.integer
+  ))
 
+# View data types and see if NA values are still present
+summary(data[c("commentCount", "shareCount", "likeCount", "videoplayCount")])
 ```
 
-```{r req_3aii}
-# Topic modelling
+## 3.2 CATEGORICAL data
 
+### 3.2.1 Converting to CATEGORICAL data
 
+```{r}
+# Converting platform and media variables to categorical data type
+data$platform <- as.factor(data$platform)
+data$media <- as.factor(data$media)
 ```
 
-## Level of user engagement and factors that influence user engagement
+### 3.2.2 Standardised media categories
 
-< (Delete this line) Type insights and recommendations here, bullet points are fine >
+The `media` variable contains inconsistent capitalisation such as `Video` and `video`, and `Image` and `image`. These values are standardised into consistent categories.
 
-```{r req_3b}
+**Data-preparation judgement:** `Photo` and `Image` are treated as the same broad media category, and `Video` and `video` are treated as the same category because the difference is only capitalisation/ label wording. Missing media values are retained as `No media recorded` rather than assumed to represent a particular media format.
 
+```{r media-preparation}
+# Standardise media labels while retaining missing media information.
+data <- data |>
+  mutate(
+    media_type = case_when(
+      is.na(media) ~ "No media recorded",
+      str_to_lower(media) %in% c("photo", "image") ~ "Image",
+      str_to_lower(media) == "video" ~ "Video",
+      str_to_lower(media) == "sidecar" ~ "Sidecar",
+      TRUE ~ "Other"
+    ),
+    media_type = factor(
+      media_type,
+      levels = c("No media recorded", "Image", "Video", "Sidecar", "Other")
+    )
+  )
 
-
+data |>
+  count(media_type, sort = TRUE) |>
+  kable(caption = "Standardised media categories")
 ```
+
+
+## 3.3 Create new variables
+
+### 3.3.1 Creating Social Engagement variable
+
+**Judgement:** Missing comments and shares are not automatically interpreted as zero in the original variables. For the derived `social_engagement` measure, `coalesce()` is used so that the measure can be calculated, while the original missingness remains available for inspection. `videoplayCount` is not included in this combined measure because video plays are conceptually different from likes, comments and shares
+
+```{r engagement-preparation}
+# Missing values in commentCount, shareCount and likeCount variables are treated as zero which means no social interaction
+# Create indicators and a social-engagement measure. Likes, comments and shares are treated as direct social interactions. Video plays are kept separate because they represent consumption rather than the same type of interaction
+data <- data |>
+  mutate(
+    social_engagement =
+      coalesce(likeCount, 0) +
+      coalesce(commentCount, 0) +
+      coalesce(shareCount, 0),
+    has_video_plays = !is.na(videoplayCount) & videoplayCount > 0,
+    has_media = media_type != "No media recorded"
+  )
+
+summary(data$social_engagement)
+```
+
+### 3.3.2 Text length and word count
+
+**Judgement:** `text_length` and `word_count` can be used to investigate whether longer posts are associated with different engagement levels.
+
+```{r text-variables}
+# Create text-based variables that can be used to investigate whether content length is associated with user engagement.
+data <- data |>
+  mutate(
+    text_clean_for_length = replace_na(text, ""),
+    text_length = str_length(text_clean_for_length),
+    word_count = str_count(
+      str_squish(text_clean_for_length),
+      "\\S+"
+    )
+  )
+
+summary(data |> select(text_length, word_count))
+```
+
+### 3.3.3 Video-content indicator
+
+**Judgement:** `media_type`, `has_media`, and `is_video` allow engagement to be compared across different content formats.
+
+```{r video-indicator}
+# Create a simple indicator for content that is explicitly identified as video.
+data <- data %>%
+  mutate(
+    is_video = media_type == "Video"
+  )
+
+data %>%
+  count(is_video) %>%
+  mutate(percent = n / sum(n) * 100) %>%
+  kable(digits = 2, caption = "Video and non-video observations")
+```
+
+## 3.4 Checking duplicate records
+
+**Data-preparation judgement:** Duplicate records should not be removed automatically without checking their meaning. In this dataset, URLs are checked first because the URL is a useful content identifier. If duplicate observations are identified, their content and timestamps should be reviewed before deciding whether they represent repeated content or data errors.
+
+```{r duplicates}
+# Check for duplicated URLs and completely duplicated rows
+duplicate_url_count <- sum(duplicated(data$url))
+duplicate_row_count <- sum(duplicated(data))
+
+tibble(
+  duplicate_type = c("Duplicated URLs", "Duplicated complete rows"),
+  count = c(duplicate_url_count, duplicate_row_count)
+) %>%
+  kable(caption = "Duplicate record checks")
+
+rm(duplicate_url_count, duplicate_row_count)
+```
+
+```{r remove-exact-duplicates}
+# Remove only completely duplicated rows.This is a conservative choice because identical URLs do not necessarily mean that the records are errors.
+data <- data |>
+  distinct()
+```
+
