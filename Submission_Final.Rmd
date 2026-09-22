@@ -322,7 +322,6 @@ data <- data |>
 The `text` variable is prepared for term-frequency analysis and topic modelling. URLs, punctuation, numbers and common stop words are removed. The text is converted to lower case and tokenised into individual words.
 
 ```{r text-cleaning}
-
 clean_ngram <- function(data, n_size, col_name) {
   data |>
     unnest_tokens(!!sym(col_name), text, token = "ngrams", n = n_size) |>
@@ -349,7 +348,11 @@ trigram_clean  <- clean_ngram(text_data, 3, "trigram")
 quadgram_clean <- clean_ngram(text_data, 4, "quadgram")
 fivegram_clean <- clean_ngram(text_data, 5, "fivegram")
 sixgram_clean  <- clean_ngram(text_data, 6, "sixgram")
+```
 
+## 4.2 Observing most frequent words
+
+```{r text-cleaning}
 # Observing most frequent words
 # Combine datasets and metadata into a structured list
 ngram_list <- list(
@@ -371,4 +374,3 @@ purrr::walk(ngram_list, function(ng) {
 })
 
 ```
-
