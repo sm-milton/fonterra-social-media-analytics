@@ -32,6 +32,9 @@ pacman::p_load(readr, dplyr, tidyr, stringr, lubridate, purrr, ggplot2, gridExtr
 pacman::p_load(tidytext, textstem, wordcloud, textdata, topicmodels)
 pacman::p_load(DescTools, skimr, finalfit, rstatix, huxtable, jtools)
 
+# Set random seed for reproducibility
+set.seed(636)
+
 ```
 
 # 2. Data Import and Initial Inspection
@@ -40,7 +43,7 @@ pacman::p_load(DescTools, skimr, finalfit, rstatix, huxtable, jtools)
 
 ```{r Import Data}
 # Import and preview data
-data_raw <- read_csv("fonterra.csv", show_col_types = FALSE)
+data_raw <- read_csv("fonterra.csv", locale = locale(encoding = "ISO-8859-1"), show_col_types = FALSE)
 
 ```
 
@@ -311,4 +314,135 @@ rm(duplicate_url_count, duplicate_row_count)
 data <- data |>
   distinct()
 ```
+
+# 4. Text Data Preparation
+
+## 4.1 Prepare text for analysis
+
+The `text` variable is prepared for term-frequency analysis and topic modelling. URLs, punctuation, numbers and common stop words are removed. The text is converted to lower case and tokenised into individual words.
+
+```{r text-cleaning}
+# Create a text dataset and remove missing/blank text.
+text_data <- data |>
+  select(url, platform, text) |>
+  mutate(text = replace_na(text, "")) |>
+  filter(str_squish(text) != "") |>
+  mutate(document = row_number())
+
+# Tokenise text into ngrams up to n = 6
+uni <- text_data |>
+  unnest_tokens(output = words,
+                input = text,
+                token = "words")
+
+bi <- text_data |>
+  unnest_tokens(output = bigram,
+                input = text,
+                token = "ngrams",
+                n = 2)
+
+tri <- text_data |>
+  unnest_tokens(output = trigram,
+                input = text,
+                token = "ngrams",
+                n = 3)
+
+quad <- text_data |>
+  unnest_tokens(output = quadgram,
+                input = text,
+                token = "ngrams",
+                n = 4)
+
+fivegram <- text_data |>
+  unnest_tokens(output = fivegram,
+                input = text,
+                token = "ngrams",
+                n = 5)
+
+sixgram <- text_data |>
+  unnest_tokens(output = sixgram,
+                input = text,
+                token = "ngrams",
+                n = 6)
+
+# Unigram - Top 20
+uni |>
+  count(words, sort = TRUE) |>
+  head(20)
+
+# Bigram - Top 20
+bi |>
+  count(bigram, sort = TRUE) |>
+  head(20)
+
+# Trigram - Top 20
+tri |>
+  count(trigram, sort = TRUE) |>
+  head(20)
+
+# Four-gram - Top 20
+quad |>
+  count(quadgram, sort = TRUE) |>
+  head(20)
+
+# Five-gram - Top 20
+fivegram |>
+  count(fivegram, sort = TRUE) |>
+  head(20)
+
+# Six-gram - Top 20
+sixgram |>
+  count(sixgram, sort = TRUE) |>
+  head(20)
+
+```
+
+## 4.2 Remove dataset-specific noise
+
+Some words can occur frequently because of the way social media content is collected rather than because they represent meaningful themes. The following terms are reviewed as potential noise.
+
+```{r custom-stopwords}
+# Remove stop words and numbers
+## Custom stop word list
+custom_list <- c("https", "http", "www", "com", "Fonterra", "fonterra", "NZ", "New Zealand")
+
+## Unigram
+uni_clean <- uni |>
+  filter(!words %in% stop_words$word,
+         !words %in% custom_list,
+         !str_detect(words, "[0-9]"))
+
+## Bigram
+bi_clean <- bi |>
+  filter(!bigram %in% stop_words$word,
+         !bigram %in% custom_list,
+         !str_detect(bigram, "[0-9]"))
+
+## Trigram
+tri_clean <- tri |>
+  filter(!trigram %in% stop_words$word,
+         !trigram %in% custom_list,
+         !str_detect(trigram, "[0-9]"))
+
+## Four-gram
+quad_clean <- quad |>
+  filter(!quadgram %in% stop_words$word,
+         !quadgram %in% custom_list,
+         !str_detect(quadgram, "[0-9]"))
+
+## Five-gram
+fivegram_clean <- fivegram |>
+  filter(!fivegram %in% stop_words$word,
+         !fivegram %in% custom_list,
+         !str_detect(fivegram, "[0-9]"))
+
+## Six-gram
+sixgram_clean <- sixgram |>
+  filter(!sixgram %in% stop_words$word,
+         !sixgram %in% custom_list,
+         !str_detect(sixgram, "[0-9]"))
+
+rm(text_data, uni, bi, tri, quad, fivegram, sixgram)
+```
+
 
