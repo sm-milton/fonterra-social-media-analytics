@@ -30,7 +30,7 @@ The analysis includes data preparation, term-frequency analysis, topic modelling
 if(!require("pacman"))install.packages("pacman")
 pacman::p_load(readr, dplyr, tidyr, stringr, lubridate, purrr, ggplot2, gridExtra, GGally, corrplot)
 pacman::p_load(tidytext, textstem, wordcloud, textdata, topicmodels)
-pacman::p_load(DescTools, skimr, finalfit, rstatix, huxtable, jtools)
+pacman::p_load(DescTools, skimr, finalfit, rstatix, huxtable, jtools, knitr)
 
 # Set random seed for reproducibility
 set.seed(636)
@@ -322,6 +322,14 @@ data <- data |>
 The `text` variable is prepared for term-frequency analysis and topic modelling. URLs, punctuation, numbers and common stop words are removed. The text is converted to lower case and tokenised into individual words.
 
 ```{r text-cleaning}
+custom_stopwords <- tibble(
+  word = c("https", "http", "www", "com",
+           "fonterra", "nz", "new", "zealand"),
+  lexicon = "custom"
+)
+
+stop_words <- bind_rows(stop_words, custom_stopwords)
+
 clean_ngram <- function(data, n_size, col_name) {
   data |>
     unnest_tokens(!!sym(col_name), text, token = "ngrams", n = n_size) |>
@@ -348,6 +356,9 @@ trigram_clean  <- clean_ngram(text_data, 3, "trigram")
 quadgram_clean <- clean_ngram(text_data, 4, "quadgram")
 fivegram_clean <- clean_ngram(text_data, 5, "fivegram")
 sixgram_clean  <- clean_ngram(text_data, 6, "sixgram")
+
+rm(clean_ngram, custom_stopwords, text_data, stop_words)
+
 ```
 
 ## 4.2 Observing most frequent words
@@ -374,3 +385,227 @@ purrr::walk(ngram_list, function(ng) {
 })
 
 ```
+
+## 4.3 Stemming and Lemmatisation
+Depending on the data, stemming and lemmatisation has been performed to improve usability of the output, make no difference, or lead to incorrect conclusions if the meaning of the words diverts too much from their original meaning.
+
+```{r}
+# Unigram
+## Stem and lemmatise words
+uni_sl <- uni_clean |>
+  mutate(stem = stem_words(word),
+         lemma = lemmatize_words(word))
+
+## Comparison of the original, stemmed, and lemmatised forms
+g1 <- uni_sl |>
+  count(word, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(word, n))) +
+  geom_col() +
+  labs(title = "Original", x = NULL, y = NULL)
+
+g2 <- uni_sl |>
+  count(stem, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(stem, n))) +
+  geom_col() +
+  labs(title = "Stemming", x = NULL, y = NULL)
+
+g3 <- uni_sl |>
+  count(lemma, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(lemma, n))) +
+  geom_col() +
+  labs(title = "Lemmatising", x = NULL, y = NULL)
+
+grid.arrange(g1, g2, g3, ncol = 3)
+
+## Keep lemmatised form and override object
+uni_clean <- uni_sl |>
+  select(-c(word, stem)) |>
+  rename(word = lemma)
+
+# Bigram
+## Stem and lemmatise bigrams
+bi_sl <- bigram_clean |>
+  mutate(bigram_stem = stem_strings(bigram),
+         bigram_lemma = lemmatize_strings(bigram))
+
+## Comparison of the original, stemmed, and lemmatised forms
+g4 <- bi_sl |>
+  count(bigram, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(bigram, n))) +
+  geom_col() +
+  labs(title = "Original", x = NULL, y = NULL)
+
+g5 <- bi_sl |>
+  count(bigram_stem, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(bigram_stem, n))) +
+  geom_col() +
+  labs(title = "Stemming", x = NULL, y = NULL)
+
+g6 <- bi_sl |>
+  count(bigram_lemma, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(bigram_lemma, n))) +
+  geom_col() +
+  labs(title = "Lemmatising", x = NULL, y = NULL)
+
+grid.arrange(g4, g5, g6, ncol = 3)
+
+## Keep lemmatised form and override object
+bi_clean <- bi_sl |>
+  select(-c(bigram, starts_with("word"), contains("stem"))) |>
+  rename(bigram = bigram_lemma)
+
+# Trigram
+## Stem and lemmatise Trigrams
+tri_sl <- trigram_clean |>
+  mutate(trigram_stem = stem_strings(trigram),
+         trigram_lemma = lemmatize_strings(trigram))
+
+## Comparison of the original, stemmed, and lemmatised forms
+g7 <- tri_sl |>
+  count(trigram, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(trigram, n))) +
+  geom_col() +
+  labs(title = "Original", x = NULL, y = NULL)
+
+g8 <- tri_sl |>
+  count(trigram_stem, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(trigram_stem, n))) +
+  geom_col() +
+  labs(title = "Stemming", x = NULL, y = NULL)
+
+g9 <- tri_sl |>
+  count(trigram_lemma, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(trigram_lemma, n))) +
+  geom_col() +
+  labs(title = "Lemmatising", x = NULL, y = NULL)
+
+grid.arrange(g7, g8, g9, ncol = 3)
+
+## Keep lemmatised form and override object
+tri_clean <- tri_sl |>
+  select(-c(trigram, starts_with("word"), contains("stem"))) |>
+  rename(trigram = trigram_lemma)
+
+# Quadgram
+## Stem and lemmatise Quadgrams
+quad_sl <- quadgram_clean |>
+  mutate(quadgram_stem = stem_strings(quadgram),
+         quadgram_lemma = lemmatize_strings(quadgram))
+
+## Comparison of the original, stemmed, and lemmatised forms
+g10 <- quad_sl |>
+  count(quadgram, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(quadgram, n))) +
+  geom_col() +
+  labs(title = "Original", x = NULL, y = NULL)
+
+g11 <- quad_sl |>
+  count(quadgram_stem, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(quadgram_stem, n))) +
+  geom_col() +
+  labs(title = "Stemming", x = NULL, y = NULL)
+
+g12 <- quad_sl |>
+  count(quadgram_lemma, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(quadgram_lemma, n))) +
+  geom_col() +
+  labs(title = "Lemmatising", x = NULL, y = NULL)
+
+grid.arrange(g10, g11, g12, ncol = 3)
+
+## Keep lemmatised form and override object
+quad_clean <- quad_sl |>
+  select(-c(quadgram, starts_with("word"), contains("stem"))) |>
+  rename(quadgram = quadgram_lemma)
+
+# Fivegram
+## Stem and lemmatise Fivegrams
+five_sl <- fivegram_clean |>
+  mutate(fivegram_stem = stem_strings(fivegram),
+         fivegram_lemma = lemmatize_strings(fivegram))
+
+## Comparison of the original, stemmed, and lemmatised forms
+g13 <- five_sl |>
+  count(fivegram, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(fivegram, n))) +
+  geom_col() +
+  labs(title = "Original", x = NULL, y = NULL)
+
+g14 <- five_sl |>
+  count(fivegram_stem, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(fivegram_stem, n))) +
+  geom_col() +
+  labs(title = "Stemming", x = NULL, y = NULL)
+
+g15 <- five_sl |>
+  count(fivegram_lemma, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(fivegram_lemma, n))) +
+  geom_col() +
+  labs(title = "Lemmatising", x = NULL, y = NULL)
+
+grid.arrange(g13, g14, g15, ncol = 3)
+
+## Keep lemmatised form and override object
+five_clean <- five_sl |>
+  select(-c(fivegram, starts_with("word"), contains("stem"))) |>
+  rename(fivegram = fivegram_lemma)
+
+# Sixgram
+## Stem and lemmatise Sixgrams
+six_sl <- sixgram_clean |>
+  mutate(sixgram_stem = stem_strings(sixgram),
+         sixgram_lemma = lemmatize_strings(sixgram))
+
+## Comparison of the original, stemmed, and lemmatised forms
+g16 <- six_sl |>
+  count(sixgram, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(sixgram, n))) +
+  geom_col() +
+  labs(title = "Original", x = NULL, y = NULL)
+
+g17 <- six_sl |>
+  count(sixgram_stem, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(sixgram_stem, n))) +
+  geom_col() +
+  labs(title = "Stemming", x = NULL, y = NULL)
+
+g18 <- six_sl |>
+  count(sixgram_lemma, sort = TRUE) |>
+  slice_max(order_by = n, n = 20) |>
+  ggplot(aes(x = n, y = reorder(sixgram_lemma, n))) +
+  geom_col() +
+  labs(title = "Lemmatising", x = NULL, y = NULL)
+
+grid.arrange(g16, g17, g18, ncol = 3)
+
+## Keep lemmatised form and override object
+six_clean <- six_sl |>
+  select(-c(sixgram, starts_with("word"), contains("stem"))) |>
+  rename(sixgram = sixgram_lemma)
+
+
+rm(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14, g15, g16, g17, g18, uni_clean, bi_clean, ngram_list, bigram_clean, tri_clean, trigram_clean, quad_clean, quadgram_clean, five_clean, fivegram_clean, six_clean, sixgram_clean)
+
+```
+
+
+
+
+
