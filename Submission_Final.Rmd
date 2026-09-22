@@ -322,6 +322,19 @@ data <- data |>
 The `text` variable is prepared for term-frequency analysis and topic modelling. URLs, punctuation, numbers and common stop words are removed. The text is converted to lower case and tokenised into individual words.
 
 ```{r text-cleaning}
+
+clean_ngram <- function(data, n_size, col_name) {
+  data |>
+    unnest_tokens(!!sym(col_name), text, token = "ngrams", n = n_size) |>
+    filter(
+      str_detect(!!sym(col_name), paste0("^([a-z]+ ){", n_size - 1, "}[a-z]+$")),
+      !str_detect(!!sym(col_name), "\\bhttps?\\b")
+    ) |>
+    filter(
+      map_lgl(str_split(!!sym(col_name), " "), ~ !any(.x %in% stop_words$word))
+    )
+}
+
 # Create a text dataset and remove missing/blank text.
 text_data <- data |>
   select(url, platform, text) |>
@@ -329,120 +342,33 @@ text_data <- data |>
   filter(str_squish(text) != "") |>
   mutate(document = row_number())
 
-# Tokenise text into ngrams up to n = 6
-uni <- text_data |>
-  unnest_tokens(output = words,
-                input = text,
-                token = "words")
+# Tokenise text into ngrams up to n = 1 to 6
+uni_clean      <- clean_ngram(text_data, 1, "word")
+bigram_clean   <- clean_ngram(text_data, 2, "bigram")
+trigram_clean  <- clean_ngram(text_data, 3, "trigram")
+quadgram_clean <- clean_ngram(text_data, 4, "quadgram")
+fivegram_clean <- clean_ngram(text_data, 5, "fivegram")
+sixgram_clean  <- clean_ngram(text_data, 6, "sixgram")
 
-bi <- text_data |>
-  unnest_tokens(output = bigram,
-                input = text,
-                token = "ngrams",
-                n = 2)
+# Observing most frequent words
+# Combine datasets and metadata into a structured list
+ngram_list <- list(
+  list(data = uni_clean, col = "word", name = "one word"),
+  list(data = bigram_clean, col = "bigram", name = "two word"),
+  list(data = trigram_clean, col = "trigram", name = "three word"),
+  list(data = quadgram_clean, col = "quadgram", name = "four word"),
+  list(data = fivegram_clean, col = "fivegram", name = "five word"),
+  list(data = sixgram_clean, col = "sixgram", name = "six word")
+)
 
-tri <- text_data |>
-  unnest_tokens(output = trigram,
-                input = text,
-                token = "ngrams",
-                n = 3)
-
-quad <- text_data |>
-  unnest_tokens(output = quadgram,
-                input = text,
-                token = "ngrams",
-                n = 4)
-
-fivegram <- text_data |>
-  unnest_tokens(output = fivegram,
-                input = text,
-                token = "ngrams",
-                n = 5)
-
-sixgram <- text_data |>
-  unnest_tokens(output = sixgram,
-                input = text,
-                token = "ngrams",
-                n = 6)
-
-# Unigram - Top 20
-uni |>
-  count(words, sort = TRUE) |>
-  head(20)
-
-# Bigram - Top 20
-bi |>
-  count(bigram, sort = TRUE) |>
-  head(20)
-
-# Trigram - Top 20
-tri |>
-  count(trigram, sort = TRUE) |>
-  head(20)
-
-# Four-gram - Top 20
-quad |>
-  count(quadgram, sort = TRUE) |>
-  head(20)
-
-# Five-gram - Top 20
-fivegram |>
-  count(fivegram, sort = TRUE) |>
-  head(20)
-
-# Six-gram - Top 20
-sixgram |>
-  count(sixgram, sort = TRUE) |>
-  head(20)
+# Generate all tables in a single operation
+purrr::walk(ngram_list, function(ng) {
+  ng$data |>
+    count(!!sym(ng$col), sort = TRUE) |>
+    slice_head(n = 30) |>
+    kable(caption = paste("Initial most frequent", ng$name, "terms")) |>
+    print()
+})
 
 ```
-
-## 4.2 Remove dataset-specific noise
-
-Some words can occur frequently because of the way social media content is collected rather than because they represent meaningful themes. The following terms are reviewed as potential noise.
-
-```{r custom-stopwords}
-# Remove stop words and numbers
-## Custom stop word list
-custom_list <- c("https", "http", "www", "com", "Fonterra", "fonterra", "NZ", "New Zealand")
-
-## Unigram
-uni_clean <- uni |>
-  filter(!words %in% stop_words$word,
-         !words %in% custom_list,
-         !str_detect(words, "[0-9]"))
-
-## Bigram
-bi_clean <- bi |>
-  filter(!bigram %in% stop_words$word,
-         !bigram %in% custom_list,
-         !str_detect(bigram, "[0-9]"))
-
-## Trigram
-tri_clean <- tri |>
-  filter(!trigram %in% stop_words$word,
-         !trigram %in% custom_list,
-         !str_detect(trigram, "[0-9]"))
-
-## Four-gram
-quad_clean <- quad |>
-  filter(!quadgram %in% stop_words$word,
-         !quadgram %in% custom_list,
-         !str_detect(quadgram, "[0-9]"))
-
-## Five-gram
-fivegram_clean <- fivegram |>
-  filter(!fivegram %in% stop_words$word,
-         !fivegram %in% custom_list,
-         !str_detect(fivegram, "[0-9]"))
-
-## Six-gram
-sixgram_clean <- sixgram |>
-  filter(!sixgram %in% stop_words$word,
-         !sixgram %in% custom_list,
-         !str_detect(sixgram, "[0-9]"))
-
-rm(text_data, uni, bi, tri, quad, fivegram, sixgram)
-```
-
 
