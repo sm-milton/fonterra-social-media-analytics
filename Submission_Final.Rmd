@@ -287,7 +287,7 @@ data <- data %>%
 
 data %>%
   count(is_video) %>%
-  mutate(percent = n / sum(n) * 100) %>%
+  mutate(percent = n/sum(n) * 100) %>%
   kable(digits = 2, caption = "Video and non-video observations")
 ```
 
@@ -601,7 +601,7 @@ hexa_clean <- hexa_sl |>
   rename(hexagram = hexagram_lemma)
 
 
-rm(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14, g15, g16, g17, g18, uni_clean, bi_clean, ngram_list, bigram_clean, tri_clean, trigram_clean, quad_clean, quadgram_clean, five_clean, fivegram_clean, six_clean, sixgram_clean)
+rm(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14, g15, g16, g17, g18, bi_clean, ngram_list, bigram_clean, tri_clean, trigram_clean, quad_clean, quadgram_clean, penta_clean, pentagram_clean, hexa_clean, hexagram_clean)
 
 ```
 
@@ -609,7 +609,7 @@ rm(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14, g15, g16, g17, g
 
 ## 5.1 Term Frequency Analysis
 
-```{r term-frequency}
+```{r}
 # Calculate term frequencies.
 # Unigram
 ## Word count table
@@ -619,18 +619,18 @@ uni_sl |>
 
 ## Ordered bar chart
 uni_sl |>
-  count(lemma, sort = TRUE) |>
+  count(uni_lemma, sort = TRUE) |>
   slice_max(n = 20, order_by = n) |>
-  ggplot(aes(x = n, y = reorder(lemma, n))) +
-  geom_col(fill = "deepskyblue") +
+  ggplot(aes(x = n, y = reorder(uni_lemma, n))) +
+  geom_col(fill = "royalblue3") +
   labs(title = "Top 20 Unigrams",  x = NULL,  y = NULL) +
   theme_minimal()
 
 ## Wordcloud
 uni_sl |>
-  group_by(lemma) |>
+  group_by(uni_lemma) |>
   summarise(count = n()) |>
-  with(wordcloud(words = lemma, 
+  with(wordcloud(words = uni_lemma, 
                  freq = count, 
                  max.words = 100,
                  rot.per = 0.2,
@@ -650,7 +650,7 @@ bi_sl |>
   count(bigram_lemma, sort = TRUE) |>
   slice_max(n = 20, order_by = n) |>
   ggplot(aes(x = n, y = reorder(bigram_lemma, n))) +
-  geom_col(fill = "deepskyblue") +
+  geom_col(fill = "royalblue3") +
   labs(title = "Top 20 Bigrams",  x = NULL,  y = NULL) +
   theme_minimal()
 
@@ -677,7 +677,7 @@ tri_sl |>
   count(trigram_lemma, sort = TRUE) |>
   slice_max(n = 20, order_by = n) |>
   ggplot(aes(x = n, y = reorder(trigram_lemma, n))) +
-  geom_col(fill = "deepskyblue") +
+  geom_col(fill = "royalblue3") +
   labs(title = "Top 20 Trigrams",  x = NULL,  y = NULL) +
   theme_minimal()
 
@@ -693,3 +693,174 @@ tri_sl |>
                  colors = brewer.pal(8, "Dark2"),
                  scale = c(1.5, 0.5)
                  ))
+
+# Quadgram
+## Word count table
+quad_sl |>
+  count(quadgram_lemma, sort = TRUE) |>
+  slice_max(n = 20, order_by = n)
+
+## Ordered bar chart
+quad_sl |>
+  count(quadgram_lemma, sort = TRUE) |>
+  slice_max(n = 20, order_by = n) |>
+  ggplot(aes(x = n, y = reorder(quadgram_lemma, n))) +
+  geom_col(fill = "royalblue3") +
+  labs(title = "Top 20 Trigrams",  x = NULL,  y = NULL) +
+  theme_minimal()
+
+## Wordcloud
+quad_sl |>
+  group_by(quadgram_lemma) |>
+  summarise(count = n()) |>
+  with(wordcloud(words = quadgram_lemma, 
+                 freq = count, 
+                 max.words = 100,
+                 rot.per = 0.2,
+                 random.order = FALSE, 
+                 colors = brewer.pal(8, "Dark2"),
+                 scale = c(1.5, 0.5)
+                 ))
+
+# Pentagram
+## Word count table
+penta_sl |>
+  count(pentagram_lemma, sort = TRUE) |>
+  slice_max(n = 20, order_by = n)
+
+## Ordered bar chart
+penta_sl |>
+  count(pentagram_lemma, sort = TRUE) |>
+  slice_max(n = 20, order_by = n) |>
+  ggplot(aes(x = n, y = reorder(pentagram_lemma, n))) +
+  geom_col(fill = "royalblue3") +
+  labs(title = "Top 20 Trigrams",  x = NULL,  y = NULL) +
+  theme_minimal()
+
+## Wordcloud
+penta_sl |>
+  group_by(pentagram_lemma) |>
+  summarise(count = n()) |>
+  with(wordcloud(words = pentagram_lemma, 
+                 freq = count, 
+                 max.words = 100,
+                 rot.per = 0.2,
+                 random.order = FALSE, 
+                 colors = brewer.pal(8, "Dark2"),
+                 scale = c(1.5, 0.5)
+                 ))
+
+# Hexagram
+## Word count table
+hexa_sl |>
+  count(hexagram_lemma, sort = TRUE) |>
+  slice_max(n = 20, order_by = n)
+
+## Ordered bar chart
+hexa_sl |>
+  count(hexagram_lemma, sort = TRUE) |>
+  slice_max(n = 20, order_by = n) |>
+  ggplot(aes(x = n, y = reorder(hexagram_lemma, n))) +
+  geom_col(fill = "royalblue3") +
+  labs(title = "Top 20 Trigrams",  x = NULL,  y = NULL) +
+  theme_minimal()
+
+## Wordcloud
+hexa_sl |>
+  group_by(hexagram_lemma) |>
+  summarise(count = n()) |>
+  with(wordcloud(words = hexagram_lemma, 
+                 freq = count, 
+                 max.words = 100,
+                 rot.per = 0.2,
+                 random.order = FALSE, 
+                 colors = brewer.pal(8, "Dark2"),
+                 scale = c(1.5, 0.5)
+                 ))
+```
+
+## 5.2 Topic Modelling
+
+A Latent Dirichlet Allocation (LDA) model with six topics is fitted as an initial model, following the assignment guidance.
+
+```{r topic-modelling-data}
+# Prepare a document-term matrix for topic modelling.
+# Documents with no remaining tokens are excluded from the model.
+document_terms <- uni_clean |>
+  count(document, word, sort = FALSE)
+
+documents_with_tokens <- document_terms |>
+  distinct(document)
+
+dtm <- document_terms |>
+  cast_dtm(document, word, n)
+
+dim(dtm)
+```
+
+```{r lda-model}
+# Fit an LDA model with six topics.
+set.seed(1234)
+
+lda_model <- LDA(
+  dtm,
+  k = 6,
+  control = list(seed = 1234)
+)
+
+lda_model
+```
+
+### 5.2.1 Most probable words for each topic
+
+```{r topic-words}
+# Extract word probabilities for each topic.
+topic_terms <- tidy(lda_model, matrix = "beta")
+
+# Display the ten highest-probability words for each topic.
+top_topic_words <- topic_terms |>
+  group_by(topic) |>
+  slice_max(beta, n = 10, with_ties = FALSE) |>
+  arrange(topic, desc(beta))|>
+  ungroup()
+
+kable(
+  top_topic_words,
+  digits = 4,
+  caption = "Top ten words by probability for each topic"
+)
+```
+
+```{r topic-word-plot, fig.width=9, fig.height=8}
+# Visualise the most probable words for each topic.
+top_topic_words |>
+  mutate(
+    plot_term = reorder_within(term, beta, topic)
+  ) |>
+  ggplot(aes(x = plot_term, y = beta)) +
+  geom_col() +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip() +
+  scale_x_reordered() +
+  labs(
+    title = "Most Probable Words Within Each Topic",
+    x = NULL,
+    y = "Word Probability"
+  ) +
+  theme_minimal()
+```
+
+** Observation:**
+Figure shows the most probable words associated with each of the six topics identified through the topic modelling analysis. The horizontal bars represent the estimated probability of each word within its corresponding topic, with longer bars indicating a stronger association with the topic.
+
+Topic 1: water, farm(er), people, product(s) — farming/sustainability themed
+
+Topic 2: milk, farmer, business, million, china — financial/milk-price themed
+
+Topic 3: team, milk, cheese, worldmilkday — brand/team themed
+
+Topic 4: team, company, award, day, kid(s) — community/awards themed
+
+Topic 5: milk, farm, product, food — production themed
+
+Topic 6: cheese, cream, dairy, share, award — consumer product themed
