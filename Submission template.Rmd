@@ -25,6 +25,11 @@ pacman::p_load(DescTools, skimr, finalfit, rstatix, huxtable, jtools)
 
 # Import and preview data
 
+data_raw <- read_csv("fonterra.csv")
+
+# Display the dimensions of the dataset.
+
+dim(data_raw)
 
 ```
 

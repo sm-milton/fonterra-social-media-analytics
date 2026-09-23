@@ -354,8 +354,8 @@ uni_clean      <- clean_ngram(text_data, 1, "word")
 bigram_clean   <- clean_ngram(text_data, 2, "bigram")
 trigram_clean  <- clean_ngram(text_data, 3, "trigram")
 quadgram_clean <- clean_ngram(text_data, 4, "quadgram")
-fivegram_clean <- clean_ngram(text_data, 5, "fivegram")
-sixgram_clean  <- clean_ngram(text_data, 6, "sixgram")
+pentagram_clean <- clean_ngram(text_data, 5, "pentagram")
+hexagram_clean  <- clean_ngram(text_data, 6, "hexagram")
 
 rm(clean_ngram, custom_stopwords, text_data, stop_words)
 
@@ -371,8 +371,8 @@ ngram_list <- list(
   list(data = bigram_clean, col = "bigram", name = "two word"),
   list(data = trigram_clean, col = "trigram", name = "three word"),
   list(data = quadgram_clean, col = "quadgram", name = "four word"),
-  list(data = fivegram_clean, col = "fivegram", name = "five word"),
-  list(data = sixgram_clean, col = "sixgram", name = "six word")
+  list(data = pentagram_clean, col = "pentagram", name = "five word"),
+  list(data = hexagram_clean, col = "hexagram", name = "six word")
 )
 
 # Generate all tables in a single operation
@@ -393,8 +393,8 @@ Depending on the data, stemming and lemmatisation has been performed to improve 
 # Unigram
 ## Stem and lemmatise words
 uni_sl <- uni_clean |>
-  mutate(stem = stem_words(word),
-         lemma = lemmatize_words(word))
+  mutate(uni_stem = stem_words(word),
+         uni_lemma = lemmatize_words(word))
 
 ## Comparison of the original, stemmed, and lemmatised forms
 g1 <- uni_sl |>
@@ -405,16 +405,16 @@ g1 <- uni_sl |>
   labs(title = "Original", x = NULL, y = NULL)
 
 g2 <- uni_sl |>
-  count(stem, sort = TRUE) |>
+  count(uni_stem, sort = TRUE) |>
   slice_max(order_by = n, n = 20) |>
-  ggplot(aes(x = n, y = reorder(stem, n))) +
+  ggplot(aes(x = n, y = reorder(uni_stem, n))) +
   geom_col() +
   labs(title = "Stemming", x = NULL, y = NULL)
 
 g3 <- uni_sl |>
-  count(lemma, sort = TRUE) |>
+  count(uni_lemma, sort = TRUE) |>
   slice_max(order_by = n, n = 20) |>
-  ggplot(aes(x = n, y = reorder(lemma, n))) +
+  ggplot(aes(x = n, y = reorder(uni_lemma, n))) +
   geom_col() +
   labs(title = "Lemmatising", x = NULL, y = NULL)
 
@@ -422,8 +422,8 @@ grid.arrange(g1, g2, g3, ncol = 3)
 
 ## Keep lemmatised form and override object
 uni_clean <- uni_sl |>
-  select(-c(word, stem)) |>
-  rename(word = lemma)
+  select(-c(word, uni_stem)) |>
+  rename(word = uni_lemma)
 
 # Bigram
 ## Stem and lemmatise bigrams
@@ -530,82 +530,166 @@ quad_clean <- quad_sl |>
   select(-c(quadgram, starts_with("word"), contains("stem"))) |>
   rename(quadgram = quadgram_lemma)
 
-# Fivegram
+# Pentagram
 ## Stem and lemmatise Fivegrams
-five_sl <- fivegram_clean |>
-  mutate(fivegram_stem = stem_strings(fivegram),
-         fivegram_lemma = lemmatize_strings(fivegram))
+penta_sl <- pentagram_clean |>
+  mutate(pentagram_stem = stem_strings(pentagram),
+         pentagram_lemma = lemmatize_strings(pentagram))
 
 ## Comparison of the original, stemmed, and lemmatised forms
-g13 <- five_sl |>
-  count(fivegram, sort = TRUE) |>
+g13 <- penta_sl |>
+  count(pentagram, sort = TRUE) |>
   slice_max(order_by = n, n = 20) |>
-  ggplot(aes(x = n, y = reorder(fivegram, n))) +
+  ggplot(aes(x = n, y = reorder(pentagram, n))) +
   geom_col() +
   labs(title = "Original", x = NULL, y = NULL)
 
-g14 <- five_sl |>
-  count(fivegram_stem, sort = TRUE) |>
+g14 <- penta_sl |>
+  count(pentagram_stem, sort = TRUE) |>
   slice_max(order_by = n, n = 20) |>
-  ggplot(aes(x = n, y = reorder(fivegram_stem, n))) +
+  ggplot(aes(x = n, y = reorder(pentagram_stem, n))) +
   geom_col() +
   labs(title = "Stemming", x = NULL, y = NULL)
 
-g15 <- five_sl |>
-  count(fivegram_lemma, sort = TRUE) |>
+g15 <- penta_sl |>
+  count(pentagram_lemma, sort = TRUE) |>
   slice_max(order_by = n, n = 20) |>
-  ggplot(aes(x = n, y = reorder(fivegram_lemma, n))) +
+  ggplot(aes(x = n, y = reorder(pentagram_lemma, n))) +
   geom_col() +
   labs(title = "Lemmatising", x = NULL, y = NULL)
 
 grid.arrange(g13, g14, g15, ncol = 3)
 
 ## Keep lemmatised form and override object
-five_clean <- five_sl |>
-  select(-c(fivegram, starts_with("word"), contains("stem"))) |>
-  rename(fivegram = fivegram_lemma)
+penta_clean <- penta_sl |>
+  select(-c(pentagram, starts_with("word"), contains("stem"))) |>
+  rename(pentagram = pentagram_lemma)
 
 # Sixgram
 ## Stem and lemmatise Sixgrams
-six_sl <- sixgram_clean |>
-  mutate(sixgram_stem = stem_strings(sixgram),
-         sixgram_lemma = lemmatize_strings(sixgram))
+hexa_sl <- hexagram_clean |>
+  mutate(hexagram_stem = stem_strings(hexagram),
+         hexagram_lemma = lemmatize_strings(hexagram))
 
 ## Comparison of the original, stemmed, and lemmatised forms
-g16 <- six_sl |>
-  count(sixgram, sort = TRUE) |>
+g16 <- hexa_sl |>
+  count(hexagram, sort = TRUE) |>
   slice_max(order_by = n, n = 20) |>
-  ggplot(aes(x = n, y = reorder(sixgram, n))) +
+  ggplot(aes(x = n, y = reorder(hexagram, n))) +
   geom_col() +
   labs(title = "Original", x = NULL, y = NULL)
 
-g17 <- six_sl |>
-  count(sixgram_stem, sort = TRUE) |>
+g17 <- hexa_sl |>
+  count(hexagram_stem, sort = TRUE) |>
   slice_max(order_by = n, n = 20) |>
-  ggplot(aes(x = n, y = reorder(sixgram_stem, n))) +
+  ggplot(aes(x = n, y = reorder(hexagram_stem, n))) +
   geom_col() +
   labs(title = "Stemming", x = NULL, y = NULL)
 
-g18 <- six_sl |>
-  count(sixgram_lemma, sort = TRUE) |>
+g18 <- hexa_sl |>
+  count(hexagram_lemma, sort = TRUE) |>
   slice_max(order_by = n, n = 20) |>
-  ggplot(aes(x = n, y = reorder(sixgram_lemma, n))) +
+  ggplot(aes(x = n, y = reorder(hexagram_lemma, n))) +
   geom_col() +
   labs(title = "Lemmatising", x = NULL, y = NULL)
 
 grid.arrange(g16, g17, g18, ncol = 3)
 
 ## Keep lemmatised form and override object
-six_clean <- six_sl |>
-  select(-c(sixgram, starts_with("word"), contains("stem"))) |>
-  rename(sixgram = sixgram_lemma)
+hexa_clean <- hexa_sl |>
+  select(-c(hexagram, starts_with("word"), contains("stem"))) |>
+  rename(hexagram = hexagram_lemma)
 
 
 rm(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14, g15, g16, g17, g18, uni_clean, bi_clean, ngram_list, bigram_clean, tri_clean, trigram_clean, quad_clean, quadgram_clean, five_clean, fivegram_clean, six_clean, sixgram_clean)
 
 ```
 
+# 5. What Topics Have Content Creators Been Posting About?
 
+## 5.1 Term Frequency Analysis
 
+```{r term-frequency}
+# Calculate term frequencies.
+# Unigram
+## Word count table
+uni_sl |>
+  count(lemma, sort = TRUE) |>
+  slice_max(n = 20, order_by = n)
 
+## Ordered bar chart
+uni_sl |>
+  count(lemma, sort = TRUE) |>
+  slice_max(n = 20, order_by = n) |>
+  ggplot(aes(x = n, y = reorder(lemma, n))) +
+  geom_col(fill = "deepskyblue") +
+  labs(title = "Top 20 Unigrams",  x = NULL,  y = NULL) +
+  theme_minimal()
 
+## Wordcloud
+uni_sl |>
+  group_by(lemma) |>
+  summarise(count = n()) |>
+  with(wordcloud(words = lemma, 
+                 freq = count, 
+                 max.words = 100,
+                 rot.per = 0.2,
+                 random.order = FALSE, 
+                 colors = brewer.pal(8, "Dark2"),
+                 scale = c(1.5, 0.5)
+                 ))
+
+# Bigram
+## Word count table
+bi_sl |>
+  count(bigram_lemma, sort = TRUE) |>
+  slice_max(n = 20, order_by = n)
+
+## Ordered bar chart
+bi_sl |>
+  count(bigram_lemma, sort = TRUE) |>
+  slice_max(n = 20, order_by = n) |>
+  ggplot(aes(x = n, y = reorder(bigram_lemma, n))) +
+  geom_col(fill = "deepskyblue") +
+  labs(title = "Top 20 Bigrams",  x = NULL,  y = NULL) +
+  theme_minimal()
+
+## Wordcloud
+bi_sl |>
+  group_by(bigram_lemma) |>
+  summarise(count = n()) |>
+  with(wordcloud(words = bigram_lemma, 
+                 freq = count, 
+                 max.words = 100,
+                 rot.per = 0.2,
+                 random.order = FALSE, 
+                 colors = brewer.pal(8, "Dark2"),
+                 scale = c(1.5, 0.5)
+                 ))
+# Trigram
+## Word count table
+tri_sl |>
+  count(trigram_lemma, sort = TRUE) |>
+  slice_max(n = 20, order_by = n)
+
+## Ordered bar chart
+tri_sl |>
+  count(trigram_lemma, sort = TRUE) |>
+  slice_max(n = 20, order_by = n) |>
+  ggplot(aes(x = n, y = reorder(trigram_lemma, n))) +
+  geom_col(fill = "deepskyblue") +
+  labs(title = "Top 20 Trigrams",  x = NULL,  y = NULL) +
+  theme_minimal()
+
+## Wordcloud
+tri_sl |>
+  group_by(trigram_lemma) |>
+  summarise(count = n()) |>
+  with(wordcloud(words = trigram_lemma, 
+                 freq = count, 
+                 max.words = 100,
+                 rot.per = 0.2,
+                 random.order = FALSE, 
+                 colors = brewer.pal(8, "Dark2"),
+                 scale = c(1.5, 0.5)
+                 ))
