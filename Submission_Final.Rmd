@@ -614,7 +614,7 @@ rm(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14, g15, g16, g17, g
 # Unigram
 ## Word count table
 uni_sl |>
-  count(lemma, sort = TRUE) |>
+  count(uni_lemma, sort = TRUE) |>
   slice_max(n = 20, order_by = n)
 
 ## Ordered bar chart
