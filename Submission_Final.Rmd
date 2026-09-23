@@ -30,7 +30,8 @@ The analysis includes data preparation, term-frequency analysis, topic modelling
 if(!require("pacman"))install.packages("pacman")
 pacman::p_load(readr, dplyr, tidyr, stringr, lubridate, purrr, ggplot2, gridExtra, GGally, corrplot)
 pacman::p_load(tidytext, textstem, wordcloud, textdata, topicmodels)
-pacman::p_load(DescTools, skimr, finalfit, rstatix, huxtable, jtools, knitr)
+pacman::p_load(DescTools, skimr, finalfit, rstatix, huxtable, jtools)
+pacman::p_load(knitr, easystats, gtsummary, gt)
 
 # Set random seed for reproducibility
 set.seed(636)
@@ -280,14 +281,14 @@ summary(data |> select(text_length, word_count))
 
 ```{r video-indicator}
 # Create a simple indicator for content that is explicitly identified as video.
-data <- data %>%
+data <- data |>
   mutate(
     is_video = media_type == "Video"
   )
 
-data %>%
-  count(is_video) %>%
-  mutate(percent = n/sum(n) * 100) %>%
+data |>
+  count(is_video) |>
+  mutate(percent = n/sum(n) * 100) |>
   kable(digits = 2, caption = "Video and non-video observations")
 ```
 
@@ -303,7 +304,7 @@ duplicate_row_count <- sum(duplicated(data))
 tibble(
   duplicate_type = c("Duplicated URLs", "Duplicated complete rows"),
   count = c(duplicate_url_count, duplicate_row_count)
-) %>%
+) |>
   kable(caption = "Duplicate record checks")
 
 rm(duplicate_url_count, duplicate_row_count)
@@ -864,3 +865,114 @@ Topic 4: team, company, award, day, kid(s) — community/awards themed
 Topic 5: milk, farm, product, food — production themed
 
 Topic 6: cheese, cream, dairy, share, award — consumer product themed
+
+# 6. User Engagement Analysis
+
+## 6.1 Descriptive statistics
+
+```{r engagement-summary}
+# Calculate descriptive statistics for the main engagement variables.
+engagement_summary <- data |>
+  summarise(
+    across(
+      c(likeCount, commentCount, shareCount, videoplayCount, social_engagement),
+      list(
+        Mean = ~ mean(., na.rm = TRUE),
+        Median = ~ median(., na.rm = TRUE),
+        Mode = ~ {
+          x <- .[!is.na(.)]
+          ux <- unique(x)
+          ux[which.max(tabulate(match(x, ux)))]
+        },
+        Q1 = ~ quantile(., 0.25, na.rm = TRUE),
+        Q2 = ~ quantile(., 0.50, na.rm = TRUE),
+        Q3 = ~ quantile(., 0.75, na.rm = TRUE),
+        SD = ~ sd(., na.rm = TRUE),
+        IQR = ~ IQR(., na.rm = TRUE),
+        Min = ~ min(., na.rm = TRUE),
+        Max = ~ max(., na.rm = TRUE)
+      ),
+      .names = "{.col}__{.fn}"
+    )
+  ) |>
+  pivot_longer(
+    everything(),
+    names_to = c("Variable", "Statistic"),
+    names_sep = "__"
+  ) |>
+  pivot_wider(
+    names_from = Variable,
+    values_from = value
+  ) |>
+  select(Statistic, everything())
+
+```
+
+## 6.2 Engagement distribution
+
+```{r engagement-distribution, fig.width=8, fig.height=6}
+# Examine the distribution of social engagement.
+ggplot(data, aes(x = social_engagement)) +
+  geom_histogram(bins = 50) +
+  scale_x_continuous(labels = comma) +
+  labs(
+    title = "Distribution of Social Engagement",
+    x = "Likes + comments + shares",
+    y = "Number of posts"
+  ) +
+  theme_minimal()
+```
+
+```{r engagement-platform-boxplot, fig.width=9, fig.height=6}
+# Compare social engagement distributions across platforms.
+ggplot(data, aes(x = reorder(platform, social_engagement, FUN = median),
+                 y = social_engagement)) +
+  geom_boxplot() +
+  scale_y_continuous(labels = comma) +
+  coord_flip() +
+  labs(
+    title = "Social Engagement by Platform",
+    x = "Platform",
+    y = "Social engagement"
+  ) +
+  theme_minimal()
+```
+
+## 6.3 Engagement by media type
+
+```{r engagement-media-boxplot, fig.width=9, fig.height=6}
+# Compare engagement across the standardised media categories.
+ggplot(data, aes(x = media_type, y = social_engagement)) +
+  geom_boxplot() +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "Social Engagement by Media Type",
+    x = "Media type",
+    y = "Social engagement"
+  ) +
+  theme_minimal()
+```
+
+## 6.4 Engagement over time
+
+```{r engagement-over-time, fig.width=9, fig.height=5}
+# Calculate median engagement by year to reduce the influence of extreme values.
+annual_engagement <- data |>
+  group_by(year) |>
+  summarise(
+    posts = n(),
+    median_engagement = median(social_engagement, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+ggplot(annual_engagement, aes(x = year, y = median_engagement)) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "Median Social Engagement by Year",
+    x = "Year",
+    y = "Median social engagement"
+  ) +
+  theme_minimal()
+```
