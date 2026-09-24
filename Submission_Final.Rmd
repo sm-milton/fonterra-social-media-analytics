@@ -937,7 +937,8 @@ Topic 5: milk, farm, product, food — production themed
 
 Topic 6: cheese, cream, dairy, share, award — consumer product themed
 
-**Discussion:** Fonterra's content is mostly about its core dairy business. The most frequent words are milk, farmer, dairy, farm and team. The most common two-word phrases are milk price, media release, farm source, dairy industry and farmgate milk. The most common three-word phrases are farmgate milk price, forecast farmgate milk, dairy industry award, grass root fund and world milk day. This shows that the accounts mainly talk about milk prices, farmers and communities, and industry news.
+## 5.4 Discussion
+Fonterra's content is mostly about its core dairy business. The most frequent words are milk, farmer, dairy, farm and team. The most common two-word phrases are milk price, media release, farm source, dairy industry and farmgate milk. The most common three-word phrases are farmgate milk price, forecast farmgate milk, dairy industry award, grass root fund and world milk day. This shows that the accounts mainly talk about milk prices, farmers and communities, and industry news.
 
 The topic model found six main themes. These are farming and water (Topic 1), milk price and business (Topic 2), brand and World Milk Day (Topic 3), community and awards (Topic 4), production and food (Topic 5) and consumer products (Topic 6). The biggest topic is [topic name, x% of posts] and the smallest is [topic name, y% of posts]. The themes match the phrases above, for example milk price (Topic 2), World Milk Day (Topic 3) and the dairy industry awards (Topic 4).
 
@@ -945,7 +946,7 @@ Each platform uses different content. TikTok is mostly about consumer brands (th
 
 Some topics get more engagement than others. As a simple check, posts that mention World Milk Day had a median engagement of about 27, compared with 5 for all posts, while posts about milk price had about 6. Because topics are partly linked to platform, and platform explains a lot of engagement, these differences are only suggestive.
 
-**Recommendations:** 
+## 5.5 Recommendations
 1. Match topics to the platforms where they already do well, instead of posting every theme everywhere.
 
 2. Give more space to topics and campaigns with high engagement, such as World Milk Day, and review topics that take up many posts but get little response.
