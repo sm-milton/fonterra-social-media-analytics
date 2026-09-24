@@ -3,6 +3,9 @@ title: "Individual Task 1 – Fonterra Social Media Analysis"
 author: "Sheikh Mohammad Milton, ID No. 1713714"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
+  pdf_document:
+    toc: true
+    toc_depth: '3'
   html_document:
     toc: true
     toc_depth: 3
