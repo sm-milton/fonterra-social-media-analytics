@@ -3,15 +3,23 @@ title: "Individual Task 1 – Fonterra Social Media Analysis"
 author: "Sheikh Mohammad Milton, ID No. 1713714"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
-  pdf_document:
-    toc: true
-    toc_depth: '3'
   html_document:
     toc: true
     toc_depth: 3
     number_sections: true
     df_print: paged
+  pdf_document:
+    toc: true
+    toc_depth: '3'
 ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE
+)
+```
 
 # 1. Introduction
 
@@ -39,7 +47,7 @@ pacman::p_load(knitr, easystats, gtsummary, gt, scales)
 
 ```{r Import Data}
 # Import and preview data
-data_raw <- read_csv("fonterra.csv", locale = locale(encoding = "ISO-8859-1"), show_col_types = FALSE)
+data_raw <- read_csv("fonterra.csv", show_col_types = FALSE)
 
 ```
 
@@ -233,10 +241,12 @@ data |>
 
 ### 3.3.1 Creating Social Engagement variable
 
-**Judgement:** Missing comments and shares are not automatically interpreted as zero in the original variables. For the derived `social_engagement` measure, `coalesce()` is used so that the measure can be calculated, while the original missing values remain available for inspection. `videoplayCount` is not included in this combined measure because video plays are conceptually different from likes, comments and shares
+**Judgement:** In the original data, missing comments and shares are left as missing. They are not changed to zero, because a missing value often means the platform did not report that number. For example, shares are missing for all Instagram and YouTube posts. To calculate social_engagement (likes + comments + shares), I treated missing comments and shares as zero, using coalesce(). This means the measure is a minimum value and may be too low for platforms that do not report shares. likeCount has no missing values, so it is the most reliable measure across platforms. I did not include videoplayCount because it counts views, not interactions such as likes, comments and shares
 
 ```{r engagement-preparation}
-# Missing values in commentCount, shareCount and likeCount variables are treated as zero which means no social interaction. Zero means no interaction
+# Missing comments and shares are treated as zero only to calculate the total.
+
+# The original columns keep their missing values, because missing often means "not reported".
 
 # Create indicators and a social-engagement measure. Likes, comments and shares are treated as direct social interactions. Video plays are kept separate because they represent consumption rather than the same type of interaction
 
@@ -323,10 +333,9 @@ The `text` variable is prepared for term-frequency analysis and topic modelling.
 
 ```{r text-cleaning}
 custom_stopwords <- tibble(
-  word = c("https", "http", "www", "com",
-           "fonterra", "nz", "new", "zealand"),
-  lexicon = "custom"
-)
+     word = c("https", "http", "www", "com", "fonterra", "nz", "new", "zealand", "amp", "uh", "um", "hey", "yeah", "okay", "gonna"),
+     lexicon = "custom"
+     )
 
 stop_words <- bind_rows(stop_words, custom_stopwords)
 
@@ -357,13 +366,15 @@ quadgram_clean <- clean_ngram(text_data, 4, "quadgram")
 pentagram_clean <- clean_ngram(text_data, 5, "pentagram")
 hexagram_clean  <- clean_ngram(text_data, 6, "hexagram")
 
+uni_clean <- uni_clean |> filter(nchar(word) > 2)
+
 rm(clean_ngram, custom_stopwords, text_data, stop_words)
 
 ```
 
 ## 4.2 Observing most frequent words
 
-```{r text-cleaning}
+```{r frequent-words}
 # Observing most frequent words
 # Combine datasets and metadata into a structured list
 ngram_list <- list(
@@ -811,7 +822,7 @@ lda_model <- LDA(
 lda_model
 ```
 
-### 5.2.1 Most probable words for each topic
+## 5.3 Most probable words for each topic
 
 ```{r topic-words}
 # Extract word probabilities for each topic.
@@ -850,8 +861,69 @@ top_topic_words |>
   theme_minimal()
 ```
 
-** Observation:**
-Figure shows the most probable words associated with each of the six topics identified through the topic modelling analysis. The horizontal bars represent the estimated probability of each word within its corresponding topic, with longer bars indicating a stronger association with the topic.
+```{r topic-assignment}
+# Assign each document its most probable topic (highest gamma) and join back to the main dataset
+doc_topics <- tidy(lda_model, matrix = "gamma") |>
+  group_by(document) |>
+  slice_max(gamma, n = 1, with_ties = FALSE) |>
+  ungroup() |>
+  mutate(document = as.integer(document)) |>
+  rename(topic_gamma = gamma)
+
+# Topic labels: check these against YOUR top-words plot before using them
+topic_labels <- tibble(
+  topic = 1:6,
+  topic_label = c("1 Farming & water", "2 Milk price & business", "3 Brand & World Milk Day",
+                  "4 Community & awards", "5 Production & food", "6 Consumer products")
+)
+
+# Map document numbers back to post URLs, then join onto the main dataset
+doc_url <- uni_clean |> distinct(document, url)
+
+doc_topics <- doc_topics |>
+  left_join(doc_url, by = "document") |>
+  left_join(topic_labels, by = "topic") |>
+  select(url, topic, topic_label, topic_gamma)
+
+data <- data |> left_join(doc_topics, by = "url")
+
+# Check: posts without a topic are those with no text or no tokens left after cleaning
+data |> summarise(with_topic = sum(!is.na(topic)), without_topic = sum(is.na(topic)))
+```
+
+```{r topic-summary}
+# Topic prevalence, topic mix by platform, and engagement by topic
+topic_data <- data |> filter(!is.na(topic_label))
+
+# Share of posts by topic
+topic_data |> count(topic_label) |> mutate(percent = round(n / sum(n) * 100, 1)) |>
+  kable(caption = "Share of posts by most probable topic")
+
+# Topic mix within each platform
+topic_data |>
+  count(platform, topic_label) |>
+  group_by(platform) |>
+  mutate(pct = n / sum(n)) |>
+  ggplot(aes(x = platform, y = pct, fill = topic_label)) +
+  geom_col() +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Topic mix by platform", x = NULL, y = "Share of posts", fill = "Topic") +
+  theme_minimal()
+
+# Median engagement by topic (topics are partly confounded with platform)
+topic_data |>
+  group_by(topic_label) |>
+  summarise(posts = n(), median_engagement = median(social_engagement),
+            mean_engagement = round(mean(social_engagement), 1), .groups = "drop") |>
+  arrange(desc(median_engagement)) |>
+  kable(caption = "Engagement by topic")
+
+# Does engagement differ by topic? (Kruskal-Wallis + effect size)
+topic_data |> kruskal_test(social_engagement ~ topic_label)
+topic_data |> kruskal_effsize(social_engagement ~ topic_label)
+```
+
+**Commentary: what the term-frequency and topic results mean for Fonterra Insights:**
 
 Topic 1: water, farm(er), people, product(s) — farming/sustainability themed
 
@@ -865,6 +937,22 @@ Topic 5: milk, farm, product, food — production themed
 
 Topic 6: cheese, cream, dairy, share, award — consumer product themed
 
+**Discussion:** Fonterra's content is mostly about its core dairy business. The most frequent words are milk, farmer, dairy, farm and team. The most common two-word phrases are milk price, media release, farm source, dairy industry and farmgate milk. The most common three-word phrases are farmgate milk price, forecast farmgate milk, dairy industry award, grass root fund and world milk day. This shows that the accounts mainly talk about milk prices, farmers and communities, and industry news.
+
+The topic model found six main themes. These are farming and water (Topic 1), milk price and business (Topic 2), brand and World Milk Day (Topic 3), community and awards (Topic 4), production and food (Topic 5) and consumer products (Topic 6). The biggest topic is [topic name, x% of posts] and the smallest is [topic name, y% of posts]. The themes match the phrases above, for example milk price (Topic 2), World Milk Day (Topic 3) and the dairy industry awards (Topic 4).
+
+Each platform uses different content. TikTok is mostly about consumer brands (the top words are Anlene, Anmum and Anchor). Instagram posts often point to a link in the bio and feature content such as tanker drivers and the living water programme. LinkedIn has more about awards, support and food. X and Facebook cover a wide mix, and X has many thank-you replies.
+
+Some topics get more engagement than others. As a simple check, posts that mention World Milk Day had a median engagement of about 27, compared with 5 for all posts, while posts about milk price had about 6. Because topics are partly linked to platform, and platform explains a lot of engagement, these differences are only suggestive.
+
+**Recommendations:** 
+1. Match topics to the platforms where they already do well, instead of posting every theme everywhere.
+
+2. Give more space to topics and campaigns with high engagement, such as World Milk Day, and review topics that take up many posts but get little response.
+
+3. Report topic shares and engagement by topic regularly, so the team can see which content works.
+
+**Limitations of the topic model:** I used k = 6 and did not test other numbers of topics. Some words (for example milk, farm and team) appear in more than one topic, so the labels are my own interpretation. Short posts, such as replies on X, have little topic information, and YouTube captions contain spoken filler words that can affect the word counts. Removing very common dairy words, or trying a different k, could give clearer topics.
 
 ```{r}
 # Keep only transformed 'data' object
@@ -1032,7 +1120,7 @@ ggplot(fonterra, aes(reorder(platform, social_engagement, median),
   theme_modern()
 ```
 
-### 6.1.5 Content factors: media, replies, text length
+### 6.1.5 Content factors: media, text length
 
 ```{r media-plots}
 ggplot(fonterra, aes(media_type, social_engagement + 1, fill = media_type)) +
@@ -1057,20 +1145,7 @@ fonterra |>
   theme(axis.text.x = element_text(angle = 30, hjust = 1))
 ```
 
-
-```{r replies}
-# Roughly 40% of X posts are @replies (customer-service style)
-fonterra |>
-  filter(platform == "Twitter/X") |>
-  group_by(is_reply) |>
-  summarise(posts = n(),
-            median_eng = median(social_engagement),
-            mean_eng = round(mean(social_engagement), 1)) |>
-  gt() |> tab_header(title = "X: replies vs original posts")
-```
-
-
-```{r text-length}
+```{r engagement vs text-length}
 ggplot(fonterra, aes(text_length + 1, social_engagement + 1)) +
   geom_point(alpha = 0.15, colour = "#2a6f97") +
   geom_smooth(method = "gam", colour = "#e07a5f") +
@@ -1152,15 +1227,13 @@ rm(p1, p2, p_dow, p_mon, platform_summary)
 
 **Media.** Posts with media have far higher median engagement than text-only posts (about 81 vs 3). Media, however, is completely absent for X in this dataset, so part of this gap is a platform effect. Inside Facebook, posts with media still outperform those without (median about 99 vs 49), and video (about 135) beats images (about 72). LinkedIn shows the same direction but a smaller gap.
 
-**Replies on X.** About 40% of X posts are @replies (customer-service style) with a median engagement of 1, compared with 5 for original posts. These dilute the apparent performance of X.
-
 **Text length and time.** Longer posts tend to have higher engagement, but text length also differs sharply by platform (YouTube and LinkedIn are long, X is short). Engagement rises with year, but the platform mix changes over time (LinkedIn and TikTok only start in 2024), so the trend cannot be read as a pure time effect. Weekday and month differences look small in medians.
 
 **Data caveats.** `shareCount` is entirely missing for Instagram and YouTube and `commentCount` is partly missing for Facebook and LinkedIn; `videoplayCount` exists for only 886 posts. Because `social_engagement` is built from these counts, it is understated for platforms that do not report shares. `text_length` has extreme outliers (up to about 39,000 characters), and 82 posts have no text.
 
 # 7. Bivariate analysis
 
-Engagement is heavily skewed and clearly non-normal, so the primary tests are non-parametric (Spearman, Wilcoxon rank-sum, Kruskal-Wallis with Dunn post hoc). Parametric equivalents (Welch t-test, Welch ANOVA with Games-Howell) are run on log(1 + engagement) as a sensitivity check.
+Engagement is heavily skewed and clearly non-normal.
 
 ## 7.1 Assumption check
 
@@ -1215,23 +1288,99 @@ fonterra |>
 
 ## 7.3 ANOVA
 
-```{r anova}
-# Parametric sensitivity check on log scale
-oneway.test(log_engagement ~ platform, data = fonterra, var.equal = FALSE)  # Welch ANOVA
-aov_platform <- aov(log_engagement ~ platform, data = fonterra)
-effectsize::eta_squared(aov_platform)
-fonterra |> games_howell_test(log_engagement ~ platform)
+```{r anova-platform}
+# ANOVA 1: does log engagement differ by platform?
 
-aov_day <- aov(log_engagement ~ day_of_week, data = fonterra)
-summary(aov_day)
-effectsize::eta_squared(aov_day)
+# Group means and SDs (log scale)
+fonterra |>
+  group_by(platform) |>
+  summarise(n = n(), mean_log_eng = mean(log_engagement), sd_log_eng = sd(log_engagement),
+            .groups = "drop") |>
+  arrange(desc(mean_log_eng)) |>
+  kable(digits = 2, caption = "Log engagement by platform")
+
+# Welch ANOVA (does not assume equal variances, which is appropriate here)
+welch_platform <- oneway.test(log_engagement ~ platform, data = fonterra, var.equal = FALSE)
+
+tibble(F = unname(welch_platform$statistic),
+       df_num = unname(welch_platform$parameter[1]),
+       df_denom = unname(welch_platform$parameter[2]),
+       p_value = format.pval(welch_platform$p.value, digits = 3, eps = 1e-16)) |>
+  kable(digits = 2, caption = "Welch ANOVA: log engagement by platform")
+
+# Classic ANOVA table and effect size (eta-squared)
+aov_platform <- aov(log_engagement ~ platform, data = fonterra)
+summary(aov_platform)
+effectsize::eta_squared(aov_platform)
+
+# Games-Howell post hoc test for all platform pairs (estimate = group2 minus group1, log scale)
+gh_platform <- fonterra |> games_howell_test(log_engagement ~ platform)
+
+gh_platform |>
+  dplyr::select(group1, group2, estimate, conf.low, conf.high, p.adj, p.adj.signif) |>
+  kable(digits = 3, caption = "Games-Howell post hoc test: platform pairs")
 ```
 
-```{r anova-plot}
-ggplot(fonterra, aes(platform, log_engagement, fill = platform)) +
+```{r anova-weekday}
+# ANOVA 2: does log engagement differ by day of week?
+
+# Group means and SDs (log scale)
+fonterra |>
+  group_by(day_of_week) |>
+  summarise(n = n(), mean_log_eng = mean(log_engagement), sd_log_eng = sd(log_engagement),
+            .groups = "drop") |>
+  kable(digits = 2, caption = "Log engagement by day of week")
+
+# Classic ANOVA table and effect size
+aov_day <- aov(log_engagement ~ day_of_week, data = fonterra)
+summary(aov_day)
+effectsize::eta_squared(aov_day)   # the CI upper bound of 1.00 is normal (one-sided interval)
+
+# Welch check: same conclusion without the equal-variance assumption
+oneway.test(log_engagement ~ day_of_week, data = fonterra, var.equal = FALSE)
+```
+
+```{r anova-plot, fig.width=9, fig.height=5}
+# Order platforms by mean log engagement so the plot matches the ANOVA table
+platform_order <- fonterra |>
+  group_by(platform) |>
+  summarise(mean_log_eng = mean(log_engagement), .groups = "drop") |>
+  arrange(desc(mean_log_eng)) |>
+  pull(platform)
+
+# Results pulled from the ANOVA chunks, so the plot subtitle always matches the output
+eta_platform <- effectsize::eta_squared(aov_platform)[[2]][1]
+
+# Plot 1: log engagement by platform (violin = distribution, box = quartiles, diamond = mean)
+fonterra |>
+  mutate(platform = factor(platform, levels = platform_order)) |>
+  ggplot(aes(platform, log_engagement, fill = platform)) +
   geom_violin(show.legend = FALSE, alpha = 0.6) +
   geom_boxplot(width = 0.15, show.legend = FALSE, outlier.alpha = 0.1) +
-  labs(title = "log(1 + engagement) by platform", x = NULL, y = "log(1 + engagement)") +
+  stat_summary(fun = mean, geom = "point", shape = 23, size = 3,
+               fill = "white", show.legend = FALSE) +
+  labs(title = "Engagement differs strongly by platform",
+       subtitle = sprintf("Welch ANOVA: F(%.0f, %.1f) = %.1f, p < 0.001, eta-squared = %.2f (diamond = mean)",
+                          welch_platform$parameter[1], welch_platform$parameter[2],
+                          welch_platform$statistic, eta_platform),
+       x = NULL, y = "log(1 + engagement)") +
+  theme_modern()
+
+# Results for the weekday ANOVA
+aov_day_tab <- summary(aov_day)[[1]]
+eta_day <- effectsize::eta_squared(aov_day)[[2]][1]
+
+# Plot 2: log engagement by day of week (shows that differences are small)
+fonterra |>
+  ggplot(aes(day_of_week, log_engagement, fill = day_of_week)) +
+  geom_boxplot(show.legend = FALSE, outlier.alpha = 0.1, alpha = 0.6) +
+  stat_summary(fun = mean, geom = "point", shape = 23, size = 3,
+               fill = "white", show.legend = FALSE) +
+  labs(title = "Engagement barely differs by day of week",
+       subtitle = sprintf("ANOVA: F(%d, %d) = %.2f, p < 0.001, but eta-squared = %.3f (diamond = mean)",
+                          aov_day_tab[["Df"]][1], aov_day_tab[["Df"]][2],
+                          aov_day_tab[["F value"]][1], eta_day),
+       x = NULL, y = "log(1 + engagement)") +
   theme_modern()
 ```
 
@@ -1275,26 +1424,17 @@ fonterra |>
   theme_modern()
 ```
 
-```{r}
-# Clear all plots (closes every graphics device)
-while (!is.null(dev.list())) dev.off()
-
-# Clear the plot pane in RStudio (if the loop above leaves old plots showing)
-if (!is.null(dev.list())) graphics.off()
-
-# Remove all objects from the environment (including hidden ones)
-rm(list = ls(all.names = TRUE))
-
-# Free memory
-gc()
-
-# Optional: clear the console
-cat("\014")
-```
-
 ## 7.5 Results and Discussion
 
-**Correlation.** Engagement is moderately and positively related to text length (Spearman rho about 0.45), word count (about 0.43) and year (about 0.49). Among the 886 posts with video play counts, plays and engagement are strongly related (rho about 0.74), and plays and likes similarly (about 0.73). Text length remains related to engagement inside X alone (rho about 0.42), so it is not purely a platform artifact. These are associations, not causal effects.
+**Correlation:** Engagement is moderately and positively related to text length (Spearman rho about 0.45), word count (about 0.43) and year (about 0.49). Among the 886 posts with video play counts, plays and engagement are strongly related (rho about 0.74), and plays and likes similarly (about 0.73). Text length remains related to engagement inside X alone (rho about 0.42), so it is not purely a platform artifact. These are associations, not causal effects.
+
+**ANOVA results (platform and day of week):** The ANOVA tests compare average engagement across groups. Because engagement is very uneven, the tests were run on log-transformed values.
+
+Platform makes a big difference. Engagement differs strongly between platforms (F(5, 714.6) = 3689.4, p < 0.001). Platform alone explains about 61% of the differences in engagement, which is a very large effect. Every pair of platforms differs significantly. LinkedIn and Instagram perform best, then Facebook, then TikTok, X and YouTube.
+
+Day of week hardly matters. The differences between days are statistically significant (F(6, 8994) = 6.09, p < 0.001) only because the dataset is large. They explain just 0.4% of the differences in engagement, so the day a post goes out has no practical effect.
+
+Therefore, Platform is the main factor linked to engagement, so posting decisions should focus on where content is published, not on which day.
 
 **Chi-squared.** Media use is strongly associated with platform (chi-squared about 6,553, df = 5, p < 0.001), which confirms the confounding between platform and media. Being a high-engagement post (above the median of 5) is also strongly associated with platform (chi-squared about 3,123, df = 5, p < 0.001). 
 
@@ -1304,32 +1444,38 @@ cat("\014")
 
 **Key insights**
 
-1. Engagement is concentrated, not typical. A few viral posts, mainly on Facebook, drive the totals, while the typical post gets around 5 interactions.
+1. **Most posts get little engagement, and a few get a lot.** The typical post receives about 5 interactions, and about 16% receive none. A small number of very popular posts, mostly on Facebook, pull the average up to about 60. This is why medians describe a typical post better than averages.
 
-2. Platform is the strongest factor. Facebook, LinkedIn and Instagram deliver the engagement; X carries most of the volume but returns little, partly because about 40% of its posts are customer-service replies.
+2. **Platform is the most important factor.** LinkedIn and Instagram have the highest typical engagement, followed by Facebook. TikTok is lower, and X and YouTube are lowest. Platform alone explains about 61% of the differences in engagement, and every pair of platforms is significantly different. Facebook produces a few viral posts, which give it about 64% of all engagement. X has 69% of the posts but only about 8% of the engagement.
 
-3. Visual content helps. Video and image posts beat text-only posts, and the advantage holds within Facebook and LinkedIn, not just across platforms. Video plays go hand in hand with likes and total engagement.
+3. **Replies on X lower its results.** About 40% of X posts are replies to customers, and these get much less engagement (median 1) than original posts (median 5). X should therefore not be judged by likes alone.
 
-4. Timing matters little. Day of week and month show small differences that are not practically useful.
+4. **Media helps, but it depends on the platform.** On Facebook, posts with images or video do better than text-only posts, and video does best. On LinkedIn, media may help, but the evidence is weak. On Instagram, video did worse than images and carousels. X, YouTube and TikTok could not be compared, because X does not record media and YouTube and TikTok are all video. So video is not the best choice everywhere.
 
-5. Longer text is associated with higher engagement, though this partly reflects platform norms.
+5. **Timing matters very little.** Day of the week and month have almost no effect on engagement, and weekends are about the same as weekdays. Time of day was not tested in this report.
+
+6. **Longer posts tend to get more engagement.** This holds even within X alone, so it is not only because some platforms use longer text. It shows a link, not a cause.
 
 **Recommendations**
 
-1. Put content effort where engagement is: prioritise Facebook, LinkedIn and Instagram for brand and campaign content, and keep X mainly as a customer-service and news channel, judging it on response quality rather than likes.
+1. **Focus on LinkedIn, Instagram and Facebook** for brand and campaign content, where engagement is highest.
 
-2. Include a video or image in most brand posts on Facebook and LinkedIn. Test short video on TikTok and Instagram, where recent engagement is mixed (TikTok median about 10).
+2. **Use X mainly for customer service and news,** and measure it by response quality and not by likes.
 
-3. Study the top posts (for example the highest 1% on Facebook) to see which topics, formats and campaigns drove them, and repeat what works.
+3. **Choose the format for each platform.** Use more video on Facebook, and test images and carousels on Instagram. Do not assume that video works everywhere.
 
-4. Do not spend effort optimising posting day; test posting time-of-day instead, which this dataset cannot answer.
+4. **Study the most popular posts,** for example the top 1% on Facebook, to see which topics and formats worked and repeat them.
 
-5. Standardise measurement: capture shares for Instagram and YouTube, complete comment counts, and record media for X posts, so that cross-platform comparisons are fair.
+5. **Do not spend effort choosing the posting day.** Instead, test time of day in the next analysis, since the data has posting times.
 
-6. Next analytical steps (beyond the bivariate scope): a multiple regression of log engagement on platform, media type, text length, reply status and year, and text/sentiment analysis of high- vs low-engagement posts.
+6. **Improve the data.** Record shares for Instagram and YouTube, complete the comment counts, record media on X, and add follower numbers so platforms can be compared fairly.
+
+**Limitations:** These results show associations in existing data and do not prove that a change would cause more engagement. Shares are not reported for Instagram and YouTube, so their engagement is understated.
+
+**Next steps:** A regression that considers platform, media, text length and reply status together, and a check of which topics and tones get the most engagement.
 
 # 9. GenAI Declaration
 
-I used ChatGpt, Claude and Copilot AI as a supporting tool during this assignment. The tool was used for brainstorming, understanding R syntax, troubleshooting code, suggesting ways to structure the analysis, and improving explanations and writing.
+I used ChatGpt, Claude and Copilot AI as a supporting tool during this assignment. The tool was used for brainstorming, understanding and shortening R syntax, troubleshooting code, suggesting ways to structure the analysis, and improving explanations and writing.
 
 I used GenAI as a supporting tool. I checked the suggested R code against the assignment requirements and ran the code in R using the supplied Fonterra dataset. I also inspected the data, outputs, statistical results, tables and visualisations myself and made the final decisions about data preparation, analysis and interpretation. Where GenAI suggestions were used, I verified that they were appropriate for the variables and statistical techniques covered in the course.
