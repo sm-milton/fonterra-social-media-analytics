@@ -1483,12 +1483,7 @@ rm(list = ls())
 # Clear all active plots/graphics devices
 if (!is.null(dev.list())) dev.off()
 
-# 3. Clear the command history (RStudio specific)
-if (requireNamespace("rstudioapi", quietly = TRUE)) {
-  rstudioapi::sendToConsole("writehistory(file = tempfile()); loadhistory(file = tempfile())", echo = FALSE)
-}
-
-# 4. Clear the Console screen (must be executed last)
+# Clear the Console screen (must be executed last)
 cat("\014")
 ```
 
