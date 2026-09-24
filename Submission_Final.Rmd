@@ -1475,6 +1475,24 @@ Therefore, Platform is the main factor linked to engagement, so posting decision
 
 **Next steps:** A regression that considers platform, media, text length and reply status together, and a check of which topics and tones get the most engagement.
 
+
+```{r- clening-environment}
+# Clear the Global Environment
+rm(list = ls())
+
+# Clear all active plots/graphics devices
+if (!is.null(dev.list())) dev.off()
+
+# 3. Clear the command history (RStudio specific)
+if (requireNamespace("rstudioapi", quietly = TRUE)) {
+  rstudioapi::sendToConsole("writehistory(file = tempfile()); loadhistory(file = tempfile())", echo = FALSE)
+}
+
+# 4. Clear the Console screen (must be executed last)
+cat("\014")
+```
+
+
 # 9. GenAI Declaration
 
 I used ChatGpt, Claude and Copilot AI as a supporting tool during this assignment. The tool was used for brainstorming, understanding and shortening R syntax, troubleshooting code, suggesting ways to structure the analysis, and improving explanations and writing.
