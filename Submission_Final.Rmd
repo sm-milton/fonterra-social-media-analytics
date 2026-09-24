@@ -1475,8 +1475,7 @@ Therefore, Platform is the main factor linked to engagement, so posting decision
 
 **Next steps:** A regression that considers platform, media, text length and reply status together, and a check of which topics and tones get the most engagement.
 
-
-```{r- clening-environment}
+```{r}
 # Clear the Global Environment
 rm(list = ls())
 
