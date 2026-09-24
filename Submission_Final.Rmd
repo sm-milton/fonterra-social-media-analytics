@@ -1137,6 +1137,8 @@ fonterra |>
   labs(title = "Engagement vs video plays (posts with play counts)",
        x = "Video plays", y = "Engagement + 1") +
   theme_modern()
+
+rm(p1, p2, p_dow, p_mon, platform_summary)
 ```
 
 ## 6.2 Findings
@@ -1153,11 +1155,178 @@ fonterra |>
 
 **Data caveats.** `shareCount` is entirely missing for Instagram and YouTube and `commentCount` is partly missing for Facebook and LinkedIn; `videoplayCount` exists for only 886 posts. Because `social_engagement` is built from these counts, it is understated for platforms that do not report shares. `text_length` has extreme outliers (up to about 39,000 characters), and 82 posts have no text.
 
+# 7. Bivariate analysis
+
+Engagement is heavily skewed and clearly non-normal, so the primary tests are non-parametric (Spearman, Wilcoxon rank-sum, Kruskal-Wallis with Dunn post hoc). Parametric equivalents (Welch t-test, Welch ANOVA with Games-Howell) are run on log(1 + engagement) as a sensitivity check.
+
+## 7.1 Assumption check
+
+```{r normality}
+set.seed(1)
+shapiro.test(sample(fonterra$log_engagement, 5000))
+
+ggplot(fonterra, aes(sample = log_engagement)) +
+  stat_qq(alpha = 0.3) + stat_qq_line(colour = "#e07a5f") +
+  labs(title = "Normal Q-Q plot of log(1 + engagement)") +
+  theme_modern()
+```
+
+## 7.2 Correlation (numeric vs numeric)
+
+```{r correlation}
+cor_res <- fonterra |>
+  select(social_engagement, text_length, word_count, year) |>
+  correlation::correlation(method = "spearman", p_adjust = "holm")
+
+cor_res |> as_tibble() |>
+  select(Parameter1, Parameter2, rho, CI_low, CI_high, p, n_Obs) |>
+  gt() |> fmt_number(c(rho, CI_low, CI_high), decimals = 2) |>
+  fmt_scientific(p, decimals = 1) |>
+  tab_header(title = "Spearman correlations (Holm-adjusted p)")
+
+# Video plays vs engagement / likes (only posts with play counts)
+video_df <- fonterra |> filter(!is.na(videoplayCount))
+cor.test(video_df$social_engagement, video_df$videoplayCount, method = "spearman", exact = FALSE)
+cor.test(video_df$likeCount,         video_df$videoplayCount, method = "spearman", exact = FALSE)
+
+# Is the text-length relationship present within a single platform (X)?
+x_df <- fonterra |> filter(platform == "Twitter/X")
+cor.test(x_df$social_engagement, x_df$text_length, method = "spearman", exact = FALSE)
+
+# Components of engagement
+fonterra |>
+  select(commentCount, shareCount, likeCount) |>
+  correlation::correlation(method = "spearman", p_adjust = "holm") |>
+  summary()
+```
 
 
+```{r correlation-plot}
+fonterra |>
+  select(social_engagement, text_length, word_count, year,
+         likeCount, commentCount, shareCount) |>
+  correlation::correlation(method = "spearman") |>
+  summary(redundant = TRUE) |>
+  plot()
+```
 
-# 11. GenAI Declaration
+## 7.3 ANOVA
 
-I used ChatGpt, Claude and Copilot AI as a supporting tool during this assignment. The tool was used for brainstorming, understanding R syntax, troubleshooting code, suggesting ways to structure the analysis, and improving explanations.
+```{r anova}
+# Parametric sensitivity check on log scale
+oneway.test(log_engagement ~ platform, data = fonterra, var.equal = FALSE)  # Welch ANOVA
+aov_platform <- aov(log_engagement ~ platform, data = fonterra)
+effectsize::eta_squared(aov_platform)
+fonterra |> games_howell_test(log_engagement ~ platform)
 
-I used GenAI as a supporting tool rather than as a replacement for my own analysis. I checked the suggested R code against the assignment requirements and ran the code in R using the supplied Fonterra dataset. I also inspected the data, outputs, statistical results, tables and visualisations myself and made the final decisions about data preparation, analysis and interpretation. Where GenAI suggestions were used, I verified that they were appropriate for the variables and statistical techniques covered in the course.
+aov_day <- aov(log_engagement ~ day_of_week, data = fonterra)
+summary(aov_day)
+effectsize::eta_squared(aov_day)
+```
+
+```{r anova-plot}
+ggplot(fonterra, aes(platform, log_engagement, fill = platform)) +
+  geom_violin(show.legend = FALSE, alpha = 0.6) +
+  geom_boxplot(width = 0.15, show.legend = FALSE, outlier.alpha = 0.1) +
+  labs(title = "log(1 + engagement) by platform", x = NULL, y = "log(1 + engagement)") +
+  theme_modern()
+```
+
+## 7.4 Chi-squared tests (Categorical vs categorical)
+
+```{r chisq}
+run_chisq <- function(data, a, b) {
+  tab <- table(data[[a]], data[[b]])
+  test <- chisq.test(tab)
+  list(table = tab,
+       test = test,
+       min_expected = min(test$expected),
+       cramers_v = effectsize::cramers_v(tab),
+       std_resid = round(test$stdres, 1))
+}
+
+# (a) Platform vs having media
+res1 <- run_chisq(fonterra, "platform", "media_present"); res1
+
+# (b) Platform vs engagement level (High = above median of 5)
+res2 <- run_chisq(fonterra, "platform", "engagement_level"); res2
+
+# (c) Media type vs engagement level
+res3 <- run_chisq(fonterra, "media_type", "engagement_level"); res3
+
+# (d) Weekend vs engagement level
+res4 <- run_chisq(fonterra, "day_type", "engagement_level"); res4
+```
+
+```{r chisq-plot}
+fonterra |>
+  count(platform, engagement_level) |>
+  group_by(platform) |>
+  mutate(pct = n / sum(n)) |>
+  ggplot(aes(platform, pct, fill = engagement_level)) +
+  geom_col() +
+  scale_y_continuous(labels = percent) +
+  scale_fill_manual(values = c("#b8c4cc", "#2a6f97")) +
+  labs(title = "Share of high-engagement posts by platform",
+       x = NULL, y = NULL, fill = "Engagement") +
+  theme_modern()
+```
+
+```{r}
+# Clear all plots (closes every graphics device)
+while (!is.null(dev.list())) dev.off()
+
+# Clear the plot pane in RStudio (if the loop above leaves old plots showing)
+if (!is.null(dev.list())) graphics.off()
+
+# Remove all objects from the environment (including hidden ones)
+rm(list = ls(all.names = TRUE))
+
+# Free memory
+gc()
+
+# Optional: clear the console
+cat("\014")
+```
+
+## 7.5 Results and Discussion
+
+**Correlation.** Engagement is moderately and positively related to text length (Spearman rho about 0.45), word count (about 0.43) and year (about 0.49). Among the 886 posts with video play counts, plays and engagement are strongly related (rho about 0.74), and plays and likes similarly (about 0.73). Text length remains related to engagement inside X alone (rho about 0.42), so it is not purely a platform artifact. These are associations, not causal effects.
+
+**Chi-squared.** Media use is strongly associated with platform (chi-squared about 6,553, df = 5, p < 0.001), which confirms the confounding between platform and media. Being a high-engagement post (above the median of 5) is also strongly associated with platform (chi-squared about 3,123, df = 5, p < 0.001). 
+
+**Limitations.** Posts are not independent (same account, campaigns, reposts), the data is observational, the platform and year confounders are not controlled in bivariate tests, and missing counts are platform-specific.
+
+# 8. Insights and recommendations
+
+**Key insights**
+
+1. Engagement is concentrated, not typical. A few viral posts, mainly on Facebook, drive the totals, while the typical post gets around 5 interactions.
+
+2. Platform is the strongest factor. Facebook, LinkedIn and Instagram deliver the engagement; X carries most of the volume but returns little, partly because about 40% of its posts are customer-service replies.
+
+3. Visual content helps. Video and image posts beat text-only posts, and the advantage holds within Facebook and LinkedIn, not just across platforms. Video plays go hand in hand with likes and total engagement.
+
+4. Timing matters little. Day of week and month show small differences that are not practically useful.
+
+5. Longer text is associated with higher engagement, though this partly reflects platform norms.
+
+**Recommendations**
+
+1. Put content effort where engagement is: prioritise Facebook, LinkedIn and Instagram for brand and campaign content, and keep X mainly as a customer-service and news channel, judging it on response quality rather than likes.
+
+2. Include a video or image in most brand posts on Facebook and LinkedIn. Test short video on TikTok and Instagram, where recent engagement is mixed (TikTok median about 10).
+
+3. Study the top posts (for example the highest 1% on Facebook) to see which topics, formats and campaigns drove them, and repeat what works.
+
+4. Do not spend effort optimising posting day; test posting time-of-day instead, which this dataset cannot answer.
+
+5. Standardise measurement: capture shares for Instagram and YouTube, complete comment counts, and record media for X posts, so that cross-platform comparisons are fair.
+
+6. Next analytical steps (beyond the bivariate scope): a multiple regression of log engagement on platform, media type, text length, reply status and year, and text/sentiment analysis of high- vs low-engagement posts.
+
+# 9. GenAI Declaration
+
+I used ChatGpt, Claude and Copilot AI as a supporting tool during this assignment. The tool was used for brainstorming, understanding R syntax, troubleshooting code, suggesting ways to structure the analysis, and improving explanations and writing.
+
+I used GenAI as a supporting tool. I checked the suggested R code against the assignment requirements and ran the code in R using the supplied Fonterra dataset. I also inspected the data, outputs, statistical results, tables and visualisations myself and made the final decisions about data preparation, analysis and interpretation. Where GenAI suggestions were used, I verified that they were appropriate for the variables and statistical techniques covered in the course.
