@@ -1,6 +1,6 @@
 ---
 title: "Individual Task 1 – Fonterra Social Media Analysis"
-author: "Sheikh Mohammad Milton"
+author: "Sheikh Mohammad Milton, ID No. 1713714"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
   html_document:
@@ -16,11 +16,6 @@ output:
 
 This assignment analyses Fonterra's social media content to identify the main topics discussed across its official social media accounts and to examine user engagement with that content. The analysis uses the supplied `fonterra.csv` dataset and is completed in R.
 
-The analysis focuses on two main questions:
-
-1. What topics have content creators been posting about on Fonterra's social media accounts?
-2. What is the level of user engagement, and what factors may influence engagement?
-
 The analysis includes data preparation, term-frequency analysis, topic modelling, exploratory data analysis, bivariate statistical analysis, and data-informed recommendations.
 
 ## 1.2 Load packages
@@ -31,7 +26,7 @@ if(!require("pacman"))install.packages("pacman")
 pacman::p_load(readr, dplyr, tidyr, stringr, lubridate, purrr, ggplot2, gridExtra, GGally, corrplot)
 pacman::p_load(tidytext, textstem, wordcloud, textdata, topicmodels)
 pacman::p_load(DescTools, skimr, finalfit, rstatix, huxtable, jtools)
-pacman::p_load(knitr, easystats, gtsummary, gt)
+pacman::p_load(knitr, easystats, gtsummary, gt, scales)
 
 ```
 
@@ -235,11 +230,13 @@ data |>
 
 ### 3.3.1 Creating Social Engagement variable
 
-**Judgement:** Missing comments and shares are not automatically interpreted as zero in the original variables. For the derived `social_engagement` measure, `coalesce()` is used so that the measure can be calculated, while the original missingness remains available for inspection. `videoplayCount` is not included in this combined measure because video plays are conceptually different from likes, comments and shares
+**Judgement:** Missing comments and shares are not automatically interpreted as zero in the original variables. For the derived `social_engagement` measure, `coalesce()` is used so that the measure can be calculated, while the original missing values remain available for inspection. `videoplayCount` is not included in this combined measure because video plays are conceptually different from likes, comments and shares
 
 ```{r engagement-preparation}
-# Missing values in commentCount, shareCount and likeCount variables are treated as zero which means no social interaction
+# Missing values in commentCount, shareCount and likeCount variables are treated as zero which means no social interaction. Zero means no interaction
+
 # Create indicators and a social-engagement measure. Likes, comments and shares are treated as direct social interactions. Video plays are kept separate because they represent consumption rather than the same type of interaction
+
 data <- data |>
   mutate(
     social_engagement =
@@ -258,7 +255,6 @@ summary(data$social_engagement)
 **Judgement:** `text_length` and `word_count` can be used to investigate whether longer posts are associated with different engagement levels.
 
 ```{r text-variables}
-# Create text-based variables that can be used to investigate whether content length is associated with user engagement.
 data <- data |>
   mutate(
     text_clean_for_length = replace_na(text, ""),
@@ -307,11 +303,14 @@ tibble(
 rm(duplicate_url_count, duplicate_row_count)
 ```
 
+
 ```{r remove-exact-duplicates}
 # Remove only completely duplicated rows.This is a conservative choice because identical URLs do not necessarily mean that the records are errors.
 data <- data |>
   distinct()
 ```
+
+** No duplicate records found **
 
 # 4. Text Data Preparation
 
@@ -863,5 +862,302 @@ Topic 5: milk, farm, product, food — production themed
 
 Topic 6: cheese, cream, dairy, share, award — consumer product themed
 
+
+```{r}
+# Keep only transformed 'data' object
+rm(list = setdiff(ls(), "data"))
+```
+
 # 6. User Engagement Analysis
 
+## 6.1 Exploratory data analysis
+
+```{r}
+# Data preparation
+
+fonterra <- data |>
+  mutate(
+    platform  = factor(platform),
+    media_type  = factor(media_type,
+                         levels = c("No media recorded", "Image", "Sidecar", "Video")),
+    day_of_week = factor(day_of_week,
+                         levels = c("Mon","Tue","Wed","Thu","Fri","Sat","Sun")),
+    month = factor(month, levels = month.abb),
+
+# Extra analysis variables
+log_engagement = log1p(social_engagement),
+engagement_level = factor(
+  if_else(social_engagement > median(social_engagement),
+          "High", "Low"),
+  levels = c("Low", "High")),
+
+media_present = factor(
+  has_media, levels = c(FALSE, TRUE),
+  labels = c("No media", "Has media")),
+
+video_post    = factor(
+  is_video, levels = c(FALSE, TRUE),
+  labels = c("Not video", "Video")),
+
+day_type  = factor(
+  if_else(day_of_week %in% c("Sat","Sun"), "Weekend", "Weekday"),
+  levels = c("Weekday", "Weekend")),
+
+# Replies on X start with an @mention (customer-service style replies)
+
+is_reply = factor(
+  str_detect(coalesce(text, ""), "^@"),
+  levels = c(FALSE, TRUE), 
+  labels = c("Original post", "Reply"))
+  )
+
+glimpse(fonterra)
+
+```
+
+### 6.1.1 Descriptive statistics
+
+```{r}
+fonterra |>
+  select(commentCount, shareCount, likeCount, videoplayCount, social_engagement, text_length, word_count) |>
+  tbl_summary(
+    type = all_continuous() ~ "continuous2",
+    statistic = all_continuous() ~ c("{mean} ({sd})",
+                                     "{median} ({p25}, {p75})",
+                                     "{min}, {max}"),
+    missing_text = "Missing"
+  ) |>
+  bold_labels()
+
+```
+
+```{r desc-by-platform}
+fonterra |>
+  select(platform, social_engagement, likeCount, commentCount, shareCount, text_length, media_type, day_type) |>
+  tbl_summary(
+    by = platform,
+    statistic = list(all_continuous() ~ "{median} ({p25}, {p75})", all_categorical() ~ "{n} ({p}%)"),
+    missing = "no"
+  ) |>
+  add_overall() |>
+  bold_labels()
+```
+
+```{r zero-engagement}
+tibble(
+  `Posts with zero engagement` =
+    percent(mean(fonterra$social_engagement == 0), 0.1),
+  `Skewness of engagement`  =
+    round(datawizard::skewness(fonterra$social_engagement)$Skewness, 1),
+  `Mean`   = round(mean(fonterra$social_engagement), 1),
+  `Median` = median(fonterra$social_engagement))|>
+  gt()
+```
+
+### 6.1.3 Distribution of engagement
+
+```{r dist-engagement}
+p1 <- ggplot(fonterra, aes(social_engagement)) +
+  geom_histogram(bins = 60, fill = "#2a6f97") +
+  labs(title = "Raw engagement (heavily right-skewed)", x = "Engagement", y = "Posts") +
+  theme_modern()
+
+p2 <- ggplot(fonterra, aes(log_engagement)) +
+  geom_histogram(bins = 40, fill = "#61a5c2") +
+  labs(title = "log(1 + engagement)", x = "log(1 + engagement)", y = "Posts") +
+  theme_modern()
+
+grid.arrange(p1, p2, ncol = 2)
+
+```
+
+```{r components}
+fonterra |>
+  summarise(Likes = sum(likeCount, na.rm = TRUE),
+            Comments = sum(commentCount, na.rm = TRUE),
+            Shares = sum(shareCount, na.rm = TRUE)) |>
+  pivot_longer(everything(), names_to = "type", values_to = "total") |>
+  mutate(share = total / sum(total)) |>
+  ggplot(aes(reorder(type, share), share)) +
+  geom_col(fill = "#2a6f97") +
+  geom_text(aes(label = percent(share, 1)), hjust = -0.1) +
+  coord_flip() +
+  scale_y_continuous(labels = percent, expand = expansion(mult = c(0, 0.15))) +
+  labs(title = "Composition of total engagement", x = NULL, y = NULL) +
+  theme_modern()
+```
+
+### 6.1.4 Platform: volume versus engagement
+
+```{r platform-share}
+platform_summary <- fonterra |>
+  group_by(platform) |>
+  summarise(posts = n(),
+            total_eng = sum(social_engagement),
+            mean_eng = mean(social_engagement),
+            median_eng = median(social_engagement),
+            .groups = "drop") |>
+  mutate(share_posts = posts / sum(posts),
+         share_eng   = total_eng / sum(total_eng))
+
+platform_summary |>
+  arrange(desc(median_eng)) |>
+  gt() |>
+  fmt_number(c(mean_eng, median_eng), decimals = 1) |>
+  fmt_percent(c(share_posts, share_eng), decimals = 1) |>
+  tab_header(title = "Platform summary")
+
+platform_summary |>
+  select(platform, `Share of posts` = share_posts, `Share of engagement` = share_eng) |>
+  pivot_longer(-platform) |>
+  ggplot(aes(platform, value, fill = name)) +
+  geom_col(position = "dodge") +
+  scale_y_continuous(labels = percent) +
+  scale_fill_manual(values = c("#e07a5f", "#2a6f97")) +
+  labs(title = "Share of posts vs share of engagement", x = NULL, y = NULL, fill = NULL) +
+  theme_modern()
+```
+
+
+```{r platform-box}
+ggplot(fonterra, aes(reorder(platform, social_engagement, median),
+                     social_engagement + 1, fill = platform)) +
+  geom_boxplot(show.legend = FALSE, outlier.alpha = 0.2) +
+  scale_y_log10(labels = comma) +
+  coord_flip() +
+  labs(title = "Engagement by platform (log scale)", x = NULL, y = "Engagement + 1") +
+  theme_modern()
+```
+
+### 6.1.5 Content factors: media, replies, text length
+
+```{r media-plots}
+ggplot(fonterra, aes(media_type, social_engagement + 1, fill = media_type)) +
+  geom_boxplot(show.legend = FALSE, outlier.alpha = 0.2) +
+  scale_y_log10(labels = comma) +
+  labs(title = "Engagement by media type (log scale)", x = NULL, y = "Engagement + 1") +
+  theme_modern()
+
+# Media type is confounded with platform: cross-tabulate
+fonterra |>
+  tbl_cross(row = platform, col = media_type, percent = "row")
+
+# Same comparison within the platforms where media varies
+fonterra |>
+  filter(platform %in% c("Facebook", "LinkedIn", "Instagram")) |>
+  ggplot(aes(media_type, social_engagement + 1, fill = media_type)) +
+  geom_boxplot(show.legend = FALSE, outlier.alpha = 0.2) +
+  scale_y_log10(labels = comma) +
+  facet_wrap(~ platform) +
+  labs(title = "Media type within platform", x = NULL, y = "Engagement + 1") +
+  theme_modern() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+
+```{r replies}
+# Roughly 40% of X posts are @replies (customer-service style)
+fonterra |>
+  filter(platform == "Twitter/X") |>
+  group_by(is_reply) |>
+  summarise(posts = n(),
+            median_eng = median(social_engagement),
+            mean_eng = round(mean(social_engagement), 1)) |>
+  gt() |> tab_header(title = "X: replies vs original posts")
+```
+
+
+```{r text-length}
+ggplot(fonterra, aes(text_length + 1, social_engagement + 1)) +
+  geom_point(alpha = 0.15, colour = "#2a6f97") +
+  geom_smooth(method = "gam", colour = "#e07a5f") +
+  scale_x_log10(labels = comma) + scale_y_log10(labels = comma) +
+  labs(title = "Engagement vs text length (log-log)",
+       x = "Text length (characters) + 1", y = "Engagement + 1") +
+  theme_modern()
+
+fonterra |>
+  group_by(platform) |>
+  summarise(median_text_length = median(text_length),
+            max_text_length = max(text_length)) |>
+  gt()
+```
+
+### 6.1.6 Time factors
+
+```{r time-year}
+fonterra |>
+  group_by(year) |>
+  summarise(posts = n(), median = median(social_engagement),
+            mean = mean(social_engagement)) |>
+  pivot_longer(c(median, mean)) |>
+  ggplot(aes(year, value, colour = name)) +
+  geom_line(linewidth = 1) + geom_point() +
+  scale_colour_manual(values = c("#e07a5f", "#2a6f97")) +
+  labs(title = "Engagement by year", x = NULL, y = "Engagement", colour = NULL) +
+  theme_modern()
+
+# Platform mix changes over time (important confounder)
+fonterra |>
+  count(year, platform) |>
+  ggplot(aes(year, n, fill = platform)) +
+  geom_col(position = "fill") +
+  scale_y_continuous(labels = percent) +
+  labs(title = "Platform mix by year", x = NULL, y = "Share of posts", fill = NULL) +
+  theme_modern()
+```
+
+```{r time-dow-month}
+p_dow <- fonterra |>
+  group_by(day_of_week) |>
+  summarise(median = median(social_engagement), n = n()) |>
+  ggplot(aes(day_of_week, median)) +
+  geom_col(fill = "#2a6f97") +
+  labs(title = "Median engagement by weekday", x = NULL, y = "Median") +
+  theme_modern()
+
+p_mon <- fonterra |>
+  group_by(month) |>
+  summarise(median = median(social_engagement)) |>
+  ggplot(aes(month, median)) +
+  geom_col(fill = "#61a5c2") +
+  labs(title = "Median engagement by month", x = NULL, y = "Median") +
+  theme_modern()
+
+grid.arrange(p_mon, p_dow, ncol = 2)
+```
+
+```{r video-plays}
+fonterra |>
+  filter(!is.na(videoplayCount)) |>
+  ggplot(aes(videoplayCount, social_engagement + 1)) +
+  geom_point(alpha = 0.3, colour = "#2a6f97") +
+  geom_smooth(method = "lm", colour = "#e07a5f") +
+  scale_x_log10(labels = comma) + scale_y_log10(labels = comma) +
+  labs(title = "Engagement vs video plays (posts with play counts)",
+       x = "Video plays", y = "Engagement + 1") +
+  theme_modern()
+```
+
+## 6.2 Findings
+
+**Level of engagement.** Engagement is very unevenly distributed. Across 9,001 posts the mean is about 60 interactions but the median is only 5, with about 16% of posts receiving no engagement at all and a maximum of 11,819. The distribution is extremely right-skewed (skewness about 19), so a small number of viral posts pull the mean far above a typical post. Medians and log-transformed values are therefore the honest summary. Likes make up the large majority of interactions; comments and shares are much rarer.
+
+**Platform.** Twitter/X supplies about 69% of posts but only about 8% of total engagement (median 2). Facebook is 16% of posts and about 64% of total engagement. Median engagement is highest on LinkedIn (about 149), Instagram (about 134) and Facebook (about 74), and lowest on YouTube (0) and X (2).
+
+**Media.** Posts with media have far higher median engagement than text-only posts (about 81 vs 3). Media, however, is completely absent for X in this dataset, so part of this gap is a platform effect. Inside Facebook, posts with media still outperform those without (median about 99 vs 49), and video (about 135) beats images (about 72). LinkedIn shows the same direction but a smaller gap.
+
+**Replies on X.** About 40% of X posts are @replies (customer-service style) with a median engagement of 1, compared with 5 for original posts. These dilute the apparent performance of X.
+
+**Text length and time.** Longer posts tend to have higher engagement, but text length also differs sharply by platform (YouTube and LinkedIn are long, X is short). Engagement rises with year, but the platform mix changes over time (LinkedIn and TikTok only start in 2024), so the trend cannot be read as a pure time effect. Weekday and month differences look small in medians.
+
+**Data caveats.** `shareCount` is entirely missing for Instagram and YouTube and `commentCount` is partly missing for Facebook and LinkedIn; `videoplayCount` exists for only 886 posts. Because `social_engagement` is built from these counts, it is understated for platforms that do not report shares. `text_length` has extreme outliers (up to about 39,000 characters), and 82 posts have no text.
+
+
+
+
+# 11. GenAI Declaration
+
+I used ChatGpt, Claude and Copilot AI as a supporting tool during this assignment. The tool was used for brainstorming, understanding R syntax, troubleshooting code, suggesting ways to structure the analysis, and improving explanations.
+
+I used GenAI as a supporting tool rather than as a replacement for my own analysis. I checked the suggested R code against the assignment requirements and ran the code in R using the supplied Fonterra dataset. I also inspected the data, outputs, statistical results, tables and visualisations myself and made the final decisions about data preparation, analysis and interpretation. Where GenAI suggestions were used, I verified that they were appropriate for the variables and statistical techniques covered in the course.
