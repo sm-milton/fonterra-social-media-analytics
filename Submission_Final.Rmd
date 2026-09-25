@@ -940,7 +940,7 @@ Topic 6: cheese, cream, dairy, share, award — consumer product themed
 ## 5.4 Discussion
 Fonterra's content is mostly about its core dairy business. The most frequent words are milk, farmer, dairy, farm and team. The most common two-word phrases are milk price, media release, farm source, dairy industry and farmgate milk. The most common three-word phrases are farmgate milk price, forecast farmgate milk, dairy industry award, grass root fund and world milk day. This shows that the accounts mainly talk about milk prices, farmers and communities, and industry news.
 
-The topic model found six main themes. These are farming and water (Topic 1), milk price and business (Topic 2), brand and World Milk Day (Topic 3), community and awards (Topic 4), production and food (Topic 5) and consumer products (Topic 6). The biggest topic is [topic name, x% of posts] and the smallest is [topic name, y% of posts]. The themes match the phrases above, for example milk price (Topic 2), World Milk Day (Topic 3) and the dairy industry awards (Topic 4).
+The topic model found six main themes. These are farming and water (Topic 1), milk price and business (Topic 2), brand and World Milk Day (Topic 3), community and awards (Topic 4), production and food (Topic 5) and consumer products (Topic 6). The themes match the phrases above, for example milk price (Topic 2), World Milk Day (Topic 3) and the dairy industry awards (Topic 4).
 
 Each platform uses different content. TikTok is mostly about consumer brands (the top words are Anlene, Anmum and Anchor). Instagram posts often point to a link in the bio and feature content such as tanker drivers and the living water programme. LinkedIn has more about awards, support and food. X and Facebook cover a wide mix, and X has many thank-you replies.
 
@@ -1252,7 +1252,7 @@ ggplot(fonterra, aes(sample = log_engagement)) +
 
 ```{r correlation}
 cor_res <- fonterra |>
-  select(social_engagement, text_length, word_count, year) |>
+  select(social_engagement, text_length, word_count) |>
   correlation::correlation(method = "spearman", p_adjust = "holm")
 
 cor_res |> as_tibble() |>
@@ -1280,8 +1280,7 @@ fonterra |>
 
 ```{r correlation-plot}
 fonterra |>
-  select(social_engagement, text_length, word_count, year,
-         likeCount, commentCount, shareCount) |>
+  select(social_engagement, text_length, word_count, likeCount, commentCount, shareCount) |>
   correlation::correlation(method = "spearman") |>
   summary(redundant = TRUE) |>
   plot()
@@ -1427,7 +1426,7 @@ fonterra |>
 
 ## 7.5 Results and Discussion
 
-**Correlation:** Engagement is moderately and positively related to text length (Spearman rho about 0.45), word count (about 0.43) and year (about 0.49). Among the 886 posts with video play counts, plays and engagement are strongly related (rho about 0.74), and plays and likes similarly (about 0.73). Text length remains related to engagement inside X alone (rho about 0.42), so it is not purely a platform artifact. These are associations, not causal effects.
+**Correlation:** Engagement is moderately and positively related to text length (Spearman rho about 0.45) and word count (about 0.43). Among the 886 posts with video play counts, plays and engagement are strongly related (rho about 0.74), and plays and likes similarly (about 0.73). Text length remains related to engagement inside X alone (rho about 0.42), so it is not purely a platform artifact. These are associations, not causal effects.
 
 **ANOVA results (platform and day of week):** The ANOVA tests compare average engagement across groups. Because engagement is very uneven, the tests were run on log-transformed values.
 
